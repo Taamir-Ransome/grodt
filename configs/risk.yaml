@@ -1,0 +1,28 @@
+# Risk management configuration
+
+# Position sizing
+position_sizing:
+  risk_per_trade: 0.0075  # 0.75% of equity per trade
+  max_position_size: 0.1  # 10% of equity max per position
+  atr_multiplier: 2.0     # ATR multiplier for stop distance
+
+# Global limits
+global_limits:
+  daily_loss_cap: 0.03    # 3% of equity daily loss cap
+  max_concurrent_positions: 3
+  cooldown_after_losses: 3  # Cooldown after 3 consecutive losses
+  cooldown_hours: 24
+
+# Kill switches
+kill_switches:
+  slippage_threshold: 3.0  # 3 sigma above baseline
+  latency_threshold: 1000  # 1 second in milliseconds
+  api_failure_threshold: 5  # 5 consecutive API failures
+  price_desync_threshold: 0.01  # 1% price desync
+
+# Risk monitoring
+monitoring:
+  check_interval: 60  # seconds
+  alert_thresholds:
+    drawdown: 0.05     # 5% drawdown alert
+    daily_pnl: -0.02   # -2% daily PnL alert

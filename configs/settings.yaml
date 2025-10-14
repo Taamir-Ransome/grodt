@@ -1,0 +1,44 @@
+# Global runtime configuration
+
+# Trading symbols and timeframes
+symbols:
+  - "BTC-USD"
+  - "ETH-USD"
+
+timeframes:
+  - "1m"
+  - "3m"
+
+# Minimum liquidity and volume guards
+min_volume_usd: 1000000
+min_spread_bps: 5
+
+# API endpoints and timeouts
+robinhood:
+  base_url: "https://api.robinhood.com"
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 1.0
+
+# Feature calculation
+features:
+  vwap_period: 20
+  ema_fast: 9
+  ema_slow: 20
+  atr_period: 14
+  rsi_period: 14
+
+# Strategy parameters
+strategies:
+  s1_vwap_ema:
+    enabled: true
+    vwap_threshold: 0.001
+    ema_crossover_threshold: 0.0005
+  
+  s2_mean_reversion:
+    enabled: false
+    reversion_threshold: 0.002
+  
+  s3_breakout:
+    enabled: false
+    breakout_threshold: 0.005
