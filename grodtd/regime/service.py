@@ -22,7 +22,7 @@ class RegimeStateService:
     current regime states and ensures regime classification is updated every 5 minutes.
     """
     
-    def __init__(self, config: Optional[RegimeConfig] = None):
+    def __init__(self, config: Optional[RegimeConfig] = None, analytics_service=None):
         self.config = config or RegimeConfig()
         self.logger = logging.getLogger(__name__)
         
@@ -34,6 +34,9 @@ class RegimeStateService:
         self._regime_confidence: Dict[str, float] = {}
         self._last_update_times: Dict[str, datetime] = {}
         
+        # Analytics service integration
+        self._analytics_service = analytics_service
+        
         # Threading for periodic updates
         self._update_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
@@ -42,7 +45,7 @@ class RegimeStateService:
         # Update interval (5 minutes)
         self._update_interval = 300  # 5 minutes in seconds
         
-        self.logger.info("RegimeStateService initialized")
+        self.logger.info("RegimeStateService initialized with analytics integration")
     
     def register_symbol(self, symbol: str) -> RegimeClassifier:
         """
@@ -77,16 +80,31 @@ class RegimeStateService:
             if symbol not in self._classifiers:
                 self.register_symbol(symbol)
             
+            # Get previous regime for accuracy tracking
+            previous_regime = self._current_regimes.get(symbol)
+            
             # Update regime classification
             classifier = self._classifiers[symbol]
             regime = classifier.update(bar)
+            confidence = classifier.get_classification_confidence()
             
             # Update service state
             self._current_regimes[symbol] = regime
-            self._regime_confidence[symbol] = classifier.get_classification_confidence()
+            self._regime_confidence[symbol] = confidence
             self._last_update_times[symbol] = datetime.now()
             
-            self.logger.debug(f"Updated regime for {symbol}: {regime.value}")
+            # Track regime accuracy in analytics if service is available
+            if self._analytics_service and previous_regime is not None:
+                try:
+                    # For now, we'll assume the new regime is "correct" 
+                    # In practice, you'd validate this against actual market conditions
+                    self._analytics_service.update_regime_accuracy(
+                        symbol, previous_regime, regime, confidence
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error tracking regime accuracy: {e}")
+            
+            self.logger.debug(f"Updated regime for {symbol}: {regime.value} (confidence: {confidence:.2f})")
             
             return regime
     

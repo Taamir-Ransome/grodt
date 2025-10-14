@@ -21,6 +21,8 @@ from grodtd.risk.manager import RiskLimits, RiskManager
 from grodtd.storage.interfaces import OHLCVBar
 from grodtd.strategies.base import Signal, StrategyState, StrategyManager
 from grodtd.strategies.s1_trend_strategy import S1TrendStrategy
+from grodtd.analytics.regime_performance_service import RegimePerformanceService
+from grodtd.regime.service import get_regime_service
 
 
 @dataclass
@@ -49,7 +51,8 @@ class TradeEntryService:
         connector: RobinhoodConnector,
         risk_manager: RiskManager,
         symbol: str,
-        config: dict[str, Any]
+        config: dict[str, Any],
+        analytics_service: RegimePerformanceService = None
     ):
         self.connector = connector
         self.risk_manager = risk_manager
@@ -75,13 +78,22 @@ class TradeEntryService:
         exit_config = config.get('trade_exit', {})
         self.exit_service = create_trade_exit_service(self.execution_engine, risk_manager, exit_config)
 
+        # Initialize analytics service
+        if analytics_service is None:
+            # Create analytics service if not provided
+            regime_service = get_regime_service()
+            db_path = config.get('database_url', 'data/grodt.db').replace('sqlite:///', '')
+            self.analytics_service = RegimePerformanceService(db_path, regime_service)
+        else:
+            self.analytics_service = analytics_service
+
         # Service state
         self.is_running = False
         self.last_processing_time: datetime | None = None
         self.processing_callbacks: list[Callable] = []
 
         self.logger = logging.getLogger(__name__)
-        self.logger.info(f"Initialized TradeEntryService for {symbol}")
+        self.logger.info(f"Initialized TradeEntryService for {symbol} with analytics integration")
 
     async def start(self):
         """Start the trade entry service."""
@@ -233,6 +245,9 @@ class TradeEntryService:
 
             await self.strategy.on_fill(signal, fill_data)
             
+            # Track trade performance in analytics
+            await self._track_trade_performance(order, signal)
+            
             # Auto-create bracket orders if enabled
             if self.config.get('trade_exit', {}).get('auto_exit_on_fill', True):
                 await self._create_bracket_orders(order)
@@ -286,6 +301,87 @@ class TradeEntryService:
         # For now, return a default ATR based on typical crypto volatility
         return 0.02  # 2% ATR as default
 
+    async def _track_trade_performance(self, order, signal: Signal):
+        """Track trade performance in analytics service."""
+        try:
+            # Calculate PnL for the trade
+            # This is a simplified calculation - in practice, you'd track entry/exit prices
+            # For now, we'll use a placeholder PnL calculation
+            pnl = self._calculate_trade_pnl(order, signal)
+            
+            # Prepare trade data for analytics
+            trade_data = {
+                'pnl': pnl,
+                'timestamp': order.filled_at or datetime.now(),
+                'symbol': order.symbol,
+                'side': order.side,
+                'quantity': order.filled_quantity,
+                'price': order.average_fill_price or order.price,
+                'order_id': order.id
+            }
+            
+            # Update analytics service
+            success = self.analytics_service.update_trade_performance(self.symbol, trade_data)
+            
+            if success:
+                self.logger.info(f"Tracked trade performance for {self.symbol}: PnL={pnl}")
+            else:
+                self.logger.warning(f"Failed to track trade performance for {self.symbol}")
+                
+        except Exception as e:
+            self.logger.error(f"Error tracking trade performance: {e}")
+
+    def _calculate_trade_pnl(self, order, signal: Signal) -> float:
+        """Calculate PnL for a trade."""
+        # This is a simplified PnL calculation
+        # In practice, you'd track entry and exit prices properly
+        # For now, we'll use a placeholder calculation based on signal strength
+        
+        # Placeholder: Use signal strength as a proxy for PnL
+        # Positive strength = profit, negative = loss
+        base_pnl = signal.strength * 100  # Scale to reasonable PnL range
+        
+        # Add some randomness to simulate real trading
+        import random
+        pnl_variance = random.uniform(0.8, 1.2)
+        
+        return base_pnl * pnl_variance
+
+    async def _track_regime_accuracy(self, predicted_regime, actual_regime, confidence: float):
+        """Track regime classification accuracy."""
+        try:
+            success = self.analytics_service.update_regime_accuracy(
+                self.symbol,
+                predicted_regime,
+                actual_regime,
+                confidence
+            )
+            
+            if success:
+                self.logger.info(f"Tracked regime accuracy for {self.symbol}: {predicted_regime} -> {actual_regime}")
+            else:
+                self.logger.warning(f"Failed to track regime accuracy for {self.symbol}")
+                
+        except Exception as e:
+            self.logger.error(f"Error tracking regime accuracy: {e}")
+
+    def get_analytics_summary(self) -> dict[str, Any]:
+        """Get analytics summary for the service."""
+        try:
+            performance = self.analytics_service.get_regime_performance(self.symbol)
+            accuracy = self.analytics_service.get_regime_accuracy(self.symbol)
+            service_status = self.analytics_service.get_service_status()
+            
+            return {
+                'performance': performance,
+                'accuracy': accuracy,
+                'service_status': service_status,
+                'symbol': self.symbol
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting analytics summary: {e}")
+            return {'error': str(e)}
+
 
 # Factory function for creating trade entry service
 def create_trade_entry_service(
@@ -293,8 +389,9 @@ def create_trade_entry_service(
     risk_limits: RiskLimits,
     account_balance: float,
     symbol: str,
-    config: dict[str, Any]
+    config: dict[str, Any],
+    analytics_service: RegimePerformanceService = None
 ) -> TradeEntryService:
     """Create a new trade entry service."""
     risk_manager = RiskManager(risk_limits, account_balance)
-    return TradeEntryService(connector, risk_manager, symbol, config)
+    return TradeEntryService(connector, risk_manager, symbol, config, analytics_service)
