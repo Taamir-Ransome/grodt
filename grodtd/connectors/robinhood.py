@@ -9,11 +9,12 @@ and order management.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 
 import httpx
 from pydantic import BaseModel
+from grodtd.storage.interfaces import MarketDataInterface, OHLCVBar
 
 
 @dataclass
@@ -85,7 +86,7 @@ class RobinhoodAuth:
         return datetime.now() < self.token_expires_at
 
 
-class RobinhoodConnector:
+class RobinhoodConnector(MarketDataInterface):
     """Main connector for Robinhood Crypto API."""
     
     def __init__(self, auth: RobinhoodAuth):
@@ -93,6 +94,7 @@ class RobinhoodConnector:
         self.base_url = "https://api.robinhood.com"
         self.client: Optional[httpx.AsyncClient] = None
         self.logger = logging.getLogger(__name__)
+        self._subscriptions: Dict[str, Callable] = {}
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -182,6 +184,50 @@ class RobinhoodConnector:
         # TODO: Implement actual API call
         self.logger.info(f"Getting orders with status: {status}")
         return []
+    
+    # MarketDataInterface implementation
+    async def get_historical_data(
+        self, 
+        symbol: str, 
+        start_date: datetime, 
+        end_date: datetime, 
+        interval: str = "1m"
+    ) -> List[OHLCVBar]:
+        """Get historical OHLCV data for a symbol."""
+        self.logger.info(f"Getting historical data for {symbol} from {start_date} to {end_date}")
+        
+        if not self.client:
+            raise RuntimeError("Connector not connected. Call connect() first.")
+        
+        # TODO: Implement actual API call to Robinhood
+        # For now, return empty list as placeholder
+        return []
+    
+    async def get_real_time_data(self, symbol: str) -> OHLCVBar:
+        """Get current real-time OHLCV data for a symbol."""
+        self.logger.info(f"Getting real-time data for {symbol}")
+        
+        if not self.client:
+            raise RuntimeError("Connector not connected. Call connect() first.")
+        
+        # TODO: Implement actual API call to Robinhood
+        # For now, return a placeholder bar
+        return OHLCVBar(
+            timestamp=datetime.now(),
+            open=0.0,
+            high=0.0,
+            low=0.0,
+            close=0.0,
+            volume=0.0
+        )
+    
+    async def subscribe_to_updates(self, symbol: str, callback: Callable) -> None:
+        """Subscribe to real-time data updates."""
+        self.logger.info(f"Subscribing to updates for {symbol}")
+        self._subscriptions[symbol] = callback
+        
+        # TODO: Implement WebSocket subscription to Robinhood
+        # For now, just store the callback
 
 
 # Factory function for creating connector instances
