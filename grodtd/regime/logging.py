@@ -16,7 +16,7 @@ import numpy as np
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from .classifier import RegimeType, RegimeFeatures
+# Import RegimeType and RegimeFeatures at runtime to avoid circular imports
 
 
 class LogLevel(Enum):
@@ -134,9 +134,9 @@ class RegimeLogger:
     def log_classification_decision(
         self,
         symbol: str,
-        regime: RegimeType,
+        regime,  # RegimeType - imported at runtime
         confidence: float,
-        features: RegimeFeatures,
+        features,  # RegimeFeatures - imported at runtime
         reasoning: str,
         performance_ms: float,
         data_quality: str = "good"
@@ -198,12 +198,12 @@ class RegimeLogger:
     def log_regime_transition(
         self,
         symbol: str,
-        from_regime: RegimeType,
-        to_regime: RegimeType,
+        from_regime,  # RegimeType - imported at runtime
+        to_regime,    # RegimeType - imported at runtime
         from_confidence: float,
         to_confidence: float,
         transition_duration_minutes: float,
-        trigger_features: RegimeFeatures
+        trigger_features  # RegimeFeatures - imported at runtime
     ):
         """
         Log a regime transition.

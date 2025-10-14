@@ -102,8 +102,9 @@ class BaseStrategy(ABC):
 class StrategyManager:
     """Manages multiple trading strategies."""
     
-    def __init__(self):
+    def __init__(self, gating_service=None):
         self.strategies: Dict[str, BaseStrategy] = {}
+        self.gating_service = gating_service
         self.logger = logging.getLogger(__name__)
     
     def add_strategy(self, strategy: BaseStrategy):
@@ -121,9 +122,18 @@ class StrategyManager:
         """Get a strategy by name."""
         return self.strategies.get(name)
     
-    def get_enabled_strategies(self) -> List[BaseStrategy]:
-        """Get all enabled strategies."""
-        return [s for s in self.strategies.values() if s.is_enabled()]
+    def get_enabled_strategies(self, symbol: str = None) -> List[BaseStrategy]:
+        """Get all enabled strategies, optionally filtered by gating service."""
+        enabled_strategies = [s for s in self.strategies.values() if s.is_enabled()]
+        
+        # Apply gating service filtering if available and symbol provided
+        if self.gating_service and symbol:
+            strategy_names = [s.name for s in enabled_strategies]
+            gated_strategies = self.gating_service.get_enabled_strategies(symbol, strategy_names)
+            enabled_strategies = [s for s in enabled_strategies if s.name in gated_strategies]
+            self.logger.debug(f"Gating service filtered strategies for {symbol}: {[s.name for s in enabled_strategies]}")
+        
+        return enabled_strategies
     
     async def run_strategies(self, state: StrategyState) -> List[Signal]:
         """
@@ -137,7 +147,10 @@ class StrategyManager:
         """
         all_signals = []
         
-        for strategy in self.get_enabled_strategies():
+        # Get enabled strategies with gating applied
+        enabled_strategies = self.get_enabled_strategies(state.symbol)
+        
+        for strategy in enabled_strategies:
             try:
                 # Prepare strategy
                 await strategy.prepare(state)

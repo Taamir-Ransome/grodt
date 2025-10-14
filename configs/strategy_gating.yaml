@@ -1,0 +1,15 @@
+confidence_threshold: 0.5
+fallback_enabled: true
+fallback_strategies: []
+manual_overrides:
+  S1TrendStrategy: true
+max_decision_latency_ms: 10.0
+override_enabled: true
+regime_strategy_mappings:
+  high_volatility: []
+  ranging:
+  - S2RangingStrategy
+  transition: []
+  trending:
+  - S1TrendStrategy
+  - S3TrendStrategy

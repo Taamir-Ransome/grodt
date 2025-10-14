@@ -16,9 +16,10 @@ from grodtd.connectors.robinhood import RobinhoodConnector
 from grodtd.execution.engine import ExecutionEngine
 from grodtd.execution.signal_service import TradeSignalService
 from grodtd.execution.trade_exit_service import TradeExitService, create_trade_exit_service
+from grodtd.execution.strategy_gating_service import StrategyGatingService, create_strategy_gating_service
 from grodtd.risk.manager import RiskLimits, RiskManager
 from grodtd.storage.interfaces import OHLCVBar
-from grodtd.strategies.base import Signal, StrategyState
+from grodtd.strategies.base import Signal, StrategyState, StrategyManager
 from grodtd.strategies.s1_trend_strategy import S1TrendStrategy
 
 
@@ -58,7 +59,17 @@ class TradeEntryService:
         # Initialize components
         self.execution_engine = ExecutionEngine(connector, risk_manager)
         self.signal_service = TradeSignalService(self.execution_engine, risk_manager)
+        
+        # Initialize strategy gating service
+        gating_config_path = config.get('gating', {}).get('config_path')
+        self.gating_service = create_strategy_gating_service(gating_config_path)
+        
+        # Initialize strategy manager with gating service
+        self.strategy_manager = StrategyManager(self.gating_service)
+        
+        # Add S1 strategy to manager
         self.strategy = S1TrendStrategy(symbol, config.get('strategy', {}))
+        self.strategy_manager.add_strategy(self.strategy)
         
         # Initialize trade exit service
         exit_config = config.get('trade_exit', {})
@@ -122,11 +133,8 @@ class TradeEntryService:
                 timestamp=market_data.timestamp
             )
 
-            # Prepare strategy
-            await self.strategy.prepare(state)
-
-            # Generate signals
-            signals = await self.strategy.generate_signals(state)
+            # Run strategies with gating applied
+            signals = await self.strategy_manager.run_strategies(state)
             signals_generated = len(signals)
 
             if signals:
@@ -176,6 +184,7 @@ class TradeEntryService:
         signal_summary = self.signal_service.get_signal_summary()
         execution_summary = self.execution_engine.get_execution_summary()
         risk_summary = self.risk_manager.get_risk_summary()
+        gating_summary = self.gating_service.get_gating_summary(self.symbol)
 
         return {
             "service_running": self.is_running,
@@ -184,7 +193,8 @@ class TradeEntryService:
             "strategy": strategy_state,
             "signals": signal_summary,
             "execution": execution_summary,
-            "risk": risk_summary
+            "risk": risk_summary,
+            "gating": gating_summary
         }
 
     async def cancel_all_signals(self) -> int:
