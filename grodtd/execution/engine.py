@@ -239,6 +239,56 @@ class ExecutionEngine:
         """Get list of active orders."""
         return list(self.active_orders.values())
     
+    def create_market_buy_order(self, symbol: str, quantity: float, price: float) -> Order:
+        """
+        Create a market buy order.
+        
+        Args:
+            symbol: Trading symbol
+            quantity: Order quantity
+            price: Current market price
+            
+        Returns:
+            Order object
+        """
+        order_id = f"buy_{symbol}_{int(datetime.now().timestamp())}"
+        
+        return Order(
+            id=order_id,
+            symbol=symbol,
+            side="buy",
+            quantity=quantity,
+            price=price,
+            order_type="market",
+            status="pending",
+            created_at=datetime.now()
+        )
+    
+    def create_market_sell_order(self, symbol: str, quantity: float, price: float) -> Order:
+        """
+        Create a market sell order.
+        
+        Args:
+            symbol: Trading symbol
+            quantity: Order quantity
+            price: Current market price
+            
+        Returns:
+            Order object
+        """
+        order_id = f"sell_{symbol}_{int(datetime.now().timestamp())}"
+        
+        return Order(
+            id=order_id,
+            symbol=symbol,
+            side="sell",
+            quantity=quantity,
+            price=price,
+            order_type="market",
+            status="pending",
+            created_at=datetime.now()
+        )
+    
     def get_execution_summary(self) -> Dict[str, Any]:
         """Get execution summary."""
         return {
