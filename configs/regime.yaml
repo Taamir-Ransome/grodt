@@ -1,0 +1,42 @@
+# Market regime classification configuration
+
+# VWAP slope thresholds for regime classification
+vwap_slope:
+  trending_threshold: 0.001      # 0.1% per period for trending
+  ranging_threshold: 0.0005      # 0.05% per period for ranging
+  window: 20                      # Number of periods for slope calculation
+
+# ATR percentile thresholds
+atr_percentiles:
+  high_volatility_percentile: 0.8  # 80th percentile for high volatility
+  low_volatility_percentile: 0.3  # 30th percentile for low volatility
+  lookback_days: 30               # Days of historical data for percentiles
+
+# Volatility ratio thresholds (current vs historical)
+volatility_ratio:
+  high_threshold: 1.5            # 50% above historical average
+  low_threshold: 0.7             # 30% below historical average
+  lookback_days: 30              # Days of historical data for comparison
+
+# Price momentum thresholds
+momentum:
+  trending_threshold: 0.02        # 2% momentum for trending
+  ranging_threshold: 0.005       # 0.5% momentum for ranging
+  window: 20                     # Number of periods for momentum calculation
+
+# Volume trend thresholds
+volume_trend:
+  threshold: 0.1                 # 10% volume change threshold
+  window: 10                     # Number of periods for volume trend
+
+# Update settings
+update:
+  interval_minutes: 5            # Regime update interval
+  max_stale_minutes: 10         # Maximum age before considering stale
+  confidence_threshold: 0.6     # Minimum confidence for reliable classification
+
+# Logging settings
+logging:
+  classification_decisions: true  # Log all classification decisions
+  feature_values: false          # Log calculated feature values
+  debug_mode: false              # Enable debug logging
