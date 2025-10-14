@@ -42,3 +42,10 @@ strategies:
   s3_breakout:
     enabled: false
     breakout_threshold: 0.005
+
+# Trade exit configuration
+trade_exit:
+  risk_reward_ratio: 1.5  # Default risk/reward ratio
+  atr_multiplier: 2.0     # ATR multiplier for stop distance
+  enable_bracket_orders: true
+  auto_exit_on_fill: true

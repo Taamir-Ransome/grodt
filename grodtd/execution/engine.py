@@ -73,6 +73,9 @@ class ExecutionEngine:
         self.state_machine = OrderStateMachine()
         self.active_orders: Dict[str, Order] = {}
         self.execution_callbacks: List[Callable] = []
+        # Bracket order tracking for OCO emulation
+        self.bracket_orders: Dict[str, List[str]] = {}  # entry_order_id -> [tp_order_id, sl_order_id]
+        self.bracket_callbacks: List[Callable] = []
         self.logger = logging.getLogger(__name__)
     
     async def submit_order(self, order: Order) -> ExecutionResult:
@@ -195,6 +198,9 @@ class ExecutionEngine:
         
         self.risk_manager.add_position(position)
         
+        # Check if this is a bracket order fill
+        await self.handle_bracket_fill(order_id, fill_data)
+        
         # Trigger callbacks
         await self._trigger_callbacks("order_filled", order)
         
@@ -289,10 +295,84 @@ class ExecutionEngine:
             created_at=datetime.now()
         )
     
+    def register_bracket_order(self, entry_order_id: str, tp_order_id: str, sl_order_id: str):
+        """
+        Register a bracket order for OCO emulation.
+        
+        Args:
+            entry_order_id: ID of the entry order
+            tp_order_id: ID of the take profit order
+            sl_order_id: ID of the stop loss order
+        """
+        self.bracket_orders[entry_order_id] = [tp_order_id, sl_order_id]
+        self.logger.info(f"Registered bracket order: entry={entry_order_id}, tp={tp_order_id}, sl={sl_order_id}")
+
+    async def handle_bracket_fill(self, filled_order_id: str, fill_data: Dict[str, Any]):
+        """
+        Handle bracket order fill and implement OCO behavior.
+        
+        Args:
+            filled_order_id: ID of the filled order
+            fill_data: Fill information
+        """
+        # Find which bracket this order belongs to
+        bracket_entry_id = None
+        for entry_id, bracket_order_ids in self.bracket_orders.items():
+            if filled_order_id in bracket_order_ids:
+                bracket_entry_id = entry_id
+                break
+        
+        if not bracket_entry_id:
+            self.logger.warning(f"No bracket found for filled order {filled_order_id}")
+            return
+        
+        # Cancel the other bracket order (OCO behavior)
+        bracket_order_ids = self.bracket_orders[bracket_entry_id]
+        for order_id in bracket_order_ids:
+            if order_id != filled_order_id and order_id in self.active_orders:
+                await self.cancel_order(order_id)
+                self.logger.info(f"Cancelled bracket order {order_id} due to OCO")
+        
+        # Remove bracket from tracking
+        del self.bracket_orders[bracket_entry_id]
+        
+        # Trigger bracket callbacks
+        await self._trigger_bracket_callbacks("bracket_filled", {
+            "entry_order_id": bracket_entry_id,
+            "filled_order_id": filled_order_id,
+            "fill_data": fill_data
+        })
+
+    async def _trigger_bracket_callbacks(self, event_type: str, data: Dict[str, Any]):
+        """Trigger bracket order callbacks."""
+        for callback in self.bracket_callbacks:
+            try:
+                await callback(event_type, data)
+            except Exception as e:
+                self.logger.error(f"Error in bracket callback: {e}")
+
+    def add_bracket_callback(self, callback: Callable):
+        """Add bracket order callback."""
+        self.bracket_callbacks.append(callback)
+
+    def get_bracket_summary(self) -> Dict[str, Any]:
+        """Get bracket order summary."""
+        return {
+            "active_brackets": len(self.bracket_orders),
+            "brackets": [
+                {
+                    "entry_order_id": entry_id,
+                    "bracket_orders": bracket_order_ids
+                }
+                for entry_id, bracket_order_ids in self.bracket_orders.items()
+            ]
+        }
+
     def get_execution_summary(self) -> Dict[str, Any]:
         """Get execution summary."""
         return {
             "active_orders": len(self.active_orders),
+            "active_brackets": len(self.bracket_orders),
             "orders": [
                 {
                     "id": order.id,

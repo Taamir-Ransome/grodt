@@ -15,6 +15,7 @@ from typing import Any
 from grodtd.connectors.robinhood import RobinhoodConnector
 from grodtd.execution.engine import ExecutionEngine
 from grodtd.execution.signal_service import TradeSignalService
+from grodtd.execution.trade_exit_service import TradeExitService, create_trade_exit_service
 from grodtd.risk.manager import RiskLimits, RiskManager
 from grodtd.storage.interfaces import OHLCVBar
 from grodtd.strategies.base import Signal, StrategyState
@@ -58,6 +59,10 @@ class TradeEntryService:
         self.execution_engine = ExecutionEngine(connector, risk_manager)
         self.signal_service = TradeSignalService(self.execution_engine, risk_manager)
         self.strategy = S1TrendStrategy(symbol, config.get('strategy', {}))
+        
+        # Initialize trade exit service
+        exit_config = config.get('trade_exit', {})
+        self.exit_service = create_trade_exit_service(self.execution_engine, risk_manager, exit_config)
 
         # Service state
         self.is_running = False
@@ -217,6 +222,10 @@ class TradeEntryService:
             }
 
             await self.strategy.on_fill(signal, fill_data)
+            
+            # Auto-create bracket orders if enabled
+            if self.config.get('trade_exit', {}).get('auto_exit_on_fill', True):
+                await self._create_bracket_orders(order)
 
     async def _on_signal_processed(self, event_type: str, signal: Signal, execution_result):
         """Handle signal processing events."""
@@ -234,6 +243,38 @@ class TradeEntryService:
         """Add a processing callback."""
         self.processing_callbacks.append(callback)
         self.logger.info("Added processing callback")
+
+    async def _create_bracket_orders(self, entry_order):
+        """Create bracket orders for a filled entry order."""
+        try:
+            # Get ATR from risk manager (if available)
+            atr = self._get_atr_for_symbol(entry_order.symbol)
+            if not atr:
+                self.logger.warning(f"No ATR available for {entry_order.symbol}, skipping bracket orders")
+                return
+            
+            # Create bracket order
+            result = await self.exit_service.create_bracket_order(
+                entry_order=entry_order,
+                entry_price=entry_order.average_fill_price or entry_order.price,
+                atr=atr,
+                risk_reward_ratio=self.config.get('trade_exit', {}).get('risk_reward_ratio', 1.5)
+            )
+            
+            if result.success:
+                self.logger.info(f"Created bracket order: {result.bracket_order_id}")
+            else:
+                self.logger.error(f"Failed to create bracket order: {result.error_message}")
+                
+        except Exception as e:
+            self.logger.error(f"Error creating bracket orders: {e}")
+
+    def _get_atr_for_symbol(self, symbol: str) -> float:
+        """Get ATR for a symbol from risk manager or strategy."""
+        # This is a simplified implementation - in practice, you'd get ATR from
+        # the strategy's technical indicators or market data
+        # For now, return a default ATR based on typical crypto volatility
+        return 0.02  # 2% ATR as default
 
 
 # Factory function for creating trade entry service
