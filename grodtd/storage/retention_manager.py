@@ -12,11 +12,12 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 try:
-from .retention_models import CleanupOperation, StorageStats, DataPriority
-from .retention_config import RetentionConfigManager
-from .retention_logging import RetentionLogger
-from .retention_cleanup import RetentionCleanup
-from .retention_monitoring import StorageMonitor
+    from .retention_models import CleanupOperation, StorageStats, DataPriority
+    from .retention_config import RetentionConfigManager
+    from .retention_logging import RetentionLogger
+    from .retention_cleanup import RetentionCleanup
+    from .retention_monitoring import StorageMonitor
+    from .retention_integrity import DataIntegrityManager
 except ImportError:
     # For testing purposes
     from retention_models import CleanupOperation, StorageStats, DataPriority
@@ -24,6 +25,7 @@ except ImportError:
     from retention_logging import RetentionLogger
     from retention_cleanup import RetentionCleanup
     from retention_monitoring import StorageMonitor
+    from retention_integrity import DataIntegrityManager
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class RetentionManager:
         self.logger = RetentionLogger()
         self.cleanup = RetentionCleanup(db_path)
         self.monitor = StorageMonitor(db_path)
+        self.integrity = DataIntegrityManager(db_path)
         
         # Get configuration
         self.config = self.config_manager.config
@@ -83,6 +86,14 @@ class RetentionManager:
             # Get current storage stats
             storage_stats = await self.get_storage_stats()
             
+            # Verify database integrity before cleanup
+            if self.config.cleanup_settings.get('verify_integrity', True):
+                integrity_result = await self.integrity.verify_database_integrity()
+                if integrity_result["status"] != "passed":
+                    logger.error(f"Database integrity verification failed: {integrity_result}")
+                    return []
+                logger.info("Database integrity verified before cleanup")
+            
             # Create backup before cleanup if configured
             if self.config.cleanup_settings.get('backup_before_cleanup') and not dry_run:
                 await self._create_cleanup_backup()
@@ -110,7 +121,7 @@ class RetentionManager:
                     self.logger.log_cleanup_operation(operation, policy)
             
             # Verify integrity after cleanup if configured
-            if self.config.cleanup_settings.get('verify_integrity') and not dry_run:
+            if self.config.cleanup_settings.get('verify_integrity', True) and not dry_run:
                 await self._verify_cleanup_integrity(operations)
             
             # Generate cleanup report
@@ -168,6 +179,22 @@ class RetentionManager:
         """Check storage against configured thresholds."""
         return await self.monitor.check_storage_thresholds(warning_threshold_mb, critical_threshold_mb)
     
+    async def verify_database_integrity(self) -> Dict[str, Any]:
+        """Verify database integrity."""
+        return await self.integrity.verify_database_integrity()
+    
+    async def create_integrity_backup(self, backup_name: Optional[str] = None) -> Dict[str, Any]:
+        """Create a backup with integrity verification."""
+        return await self.integrity.create_integrity_backup(backup_name)
+    
+    async def restore_from_backup(self, backup_name: str, verify_integrity: bool = True) -> Dict[str, Any]:
+        """Restore database from backup with integrity verification."""
+        return await self.integrity.restore_from_backup(backup_name, verify_integrity)
+    
+    async def get_integrity_status(self) -> Dict[str, Any]:
+        """Get current integrity status and history."""
+        return await self.integrity.get_integrity_status()
+    
     async def _create_cleanup_backup(self):
         """Create backup before cleanup."""
         logger.info("Creating backup before cleanup...")
@@ -178,9 +205,24 @@ class RetentionManager:
     async def _verify_cleanup_integrity(self, operations: List[CleanupOperation]):
         """Verify data integrity after cleanup."""
         logger.info("Verifying cleanup integrity...")
-        # This would perform integrity checks
-        # For now, just log the action
-        logger.info("Integrity verification completed")
+        
+        try:
+            # Perform post-cleanup integrity verification
+            integrity_result = await self.integrity.verify_database_integrity()
+            
+            if integrity_result["status"] == "passed":
+                logger.info("Post-cleanup integrity verification passed")
+            else:
+                logger.error(f"Post-cleanup integrity verification failed: {integrity_result}")
+                # Could trigger rollback here if configured
+                if self.config.cleanup_settings.get('rollback_on_failure', True):
+                    logger.warning("Rollback triggered due to integrity failure")
+                    await self._rollback_cleanup(operations)
+            
+        except Exception as e:
+            logger.error(f"Integrity verification failed: {e}")
+            if self.config.cleanup_settings.get('rollback_on_failure', True):
+                await self._rollback_cleanup(operations)
     
     async def _create_cleanup_audit_trail(self, operations: List[CleanupOperation]):
         """Create audit trail for cleanup operations."""

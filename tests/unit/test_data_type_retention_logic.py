@@ -18,10 +18,8 @@ import yaml
 # Import the modules to test
 import sys
 sys.path.append('grodtd/storage')
-from retention_manager import (
-    RetentionManager, RetentionPolicy, DataPriority, CleanupOperation,
-    create_retention_manager
-)
+from retention_manager import RetentionManager, create_retention_manager
+from retention_models import RetentionPolicy, DataPriority, CleanupOperation
 
 
 class TestDataTypeRetentionLogic(unittest.TestCase):
