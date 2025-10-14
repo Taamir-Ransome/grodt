@@ -1,51 +1,31 @@
-# Global runtime configuration
+# Application Settings
+# This file contains the main configuration for the trading system
 
-# Trading symbols and timeframes
-symbols:
-  - "BTC-USD"
-  - "ETH-USD"
+# Execution Handler Configuration
+# Determines which broker/execution handler to use
+execution:
+  handler: alpaca_paper  # Options: alpaca_paper, robinhood_live
 
-timeframes:
-  - "1m"
-  - "3m"
+# Logging Configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/trading.log"
 
-# Minimum liquidity and volume guards
-min_volume_usd: 1000000
-min_spread_bps: 5
+# Data Configuration
+data:
+  storage_path: "data"
+  backup_enabled: true
+  backup_interval: "1h"
 
-# API endpoints and timeouts
-robinhood:
-  base_url: "https://api.robinhood.com"
-  timeout: 30
-  retry_attempts: 3
-  retry_delay: 1.0
+# Risk Management
+risk:
+  max_position_size: 0.1  # 10% of portfolio
+  stop_loss_percentage: 0.05  # 5% stop loss
+  take_profit_percentage: 0.15  # 15% take profit
 
-# Feature calculation
-features:
-  vwap_period: 20
-  ema_fast: 9
-  ema_slow: 20
-  atr_period: 14
-  rsi_period: 14
-
-# Strategy parameters
-strategies:
-  s1_vwap_ema:
-    enabled: true
-    vwap_threshold: 0.001
-    ema_crossover_threshold: 0.0005
-  
-  s2_mean_reversion:
-    enabled: false
-    reversion_threshold: 0.002
-  
-  s3_breakout:
-    enabled: false
-    breakout_threshold: 0.005
-
-# Trade exit configuration
-trade_exit:
-  risk_reward_ratio: 1.5  # Default risk/reward ratio
-  atr_multiplier: 2.0     # ATR multiplier for stop distance
-  enable_bracket_orders: true
-  auto_exit_on_fill: true
+# Strategy Configuration
+strategy:
+  enabled: true
+  rebalance_interval: "1h"
+  max_trades_per_day: 10

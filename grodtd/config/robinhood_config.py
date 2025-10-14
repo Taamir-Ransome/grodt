@@ -7,6 +7,7 @@ import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
 
 class RobinhoodConfig(BaseModel):
@@ -22,7 +23,10 @@ class RobinhoodConfig(BaseModel):
 
 
 def load_robinhood_config(config_path: Optional[Path] = None) -> RobinhoodConfig:
-    """Load Robinhood configuration from file or environment variables."""
+    """Load Robinhood configuration from .env file or environment variables."""
+    
+    # Load .env file if it exists
+    load_dotenv()
     
     # Try environment variables first (most secure)
     api_key = os.getenv("ROBINHOOD_API_KEY")

@@ -23,6 +23,7 @@ import nacl.signing
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from grodtd.storage.interfaces import MarketDataInterface, OHLCVBar
+from grodtd.connectors.base import ExecutionHandler, Order, Position, AccountBalance, OrderSide, OrderType
 
 
 @dataclass
@@ -121,11 +122,28 @@ class RobinhoodAuth:
     
 
 
-class RobinhoodConnector(MarketDataInterface):
+class RobinhoodLiveHandler(ExecutionHandler, MarketDataInterface):
     """Main connector for Robinhood Crypto API."""
     
-    def __init__(self, auth: RobinhoodAuth):
-        self.auth = auth
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initialize Robinhood live trading handler.
+        
+        Args:
+            config: Configuration dictionary containing:
+                - api_key: Robinhood API key
+                - private_key: Robinhood private key
+                - public_key: Robinhood public key
+        """
+        super().__init__(config)
+        self.api_key = config.get("api_key")
+        self.private_key = config.get("private_key")
+        self.public_key = config.get("public_key")
+        
+        if not all([self.api_key, self.private_key, self.public_key]):
+            raise ValueError("Robinhood API key, private key, and public key are required")
+        
+        self.auth = RobinhoodAuth(self.api_key, self.private_key, self.public_key)
         self.base_url = "https://trading.robinhood.com"
         self.client: Optional[httpx.AsyncClient] = None
         self.logger = logging.getLogger(__name__)
@@ -212,13 +230,16 @@ class RobinhoodConnector(MarketDataInterface):
         try:
             # Build query parameters for multiple symbols
             params = {}
-            for i, symbol in enumerate(symbols):
-                params[f"symbol"] = symbol  # Robinhood expects multiple symbol params
+            for symbol in symbols:
+                params["symbol"] = symbol  # Robinhood expects multiple symbol params
+            
+            # Build the full path with query parameters
+            query_string = "&".join([f"symbol={symbol}" for symbol in symbols])
+            endpoint = f"/api/v1/crypto/trading/trading_pairs/?{query_string}"
             
             response = await self._make_request(
                 "GET", 
-                "/api/v1/crypto/trading/trading_pairs/",
-                params=params
+                endpoint
             )
             
             if response.status_code == 200:
@@ -235,15 +256,13 @@ class RobinhoodConnector(MarketDataInterface):
     async def get_best_bid_ask(self, symbols: List[str]) -> List[Quote]:
         """Get current best bid/ask prices for symbols."""
         try:
-            # Build query parameters for multiple symbols
-            params = {}
-            for symbol in symbols:
-                params["symbol"] = symbol  # Robinhood expects multiple symbol params
+            # Build the full path with query parameters
+            query_string = "&".join([f"symbol={symbol}" for symbol in symbols])
+            endpoint = f"/api/v1/crypto/marketdata/best_bid_ask/?{query_string}"
             
             response = await self._make_request(
                 "GET",
-                "/api/v1/crypto/marketdata/best_bid_ask/",
-                params=params
+                endpoint
             )
             
             if response.status_code == 200:
@@ -293,10 +312,47 @@ class RobinhoodConnector(MarketDataInterface):
             return []
     
     async def place_order(self, order: Order) -> str:
-        """Place a new order."""
-        # TODO: Implement actual API call
-        self.logger.info(f"Placing order: {order.symbol} {order.side} {order.quantity}")
-        return f"order_{order.id}"
+        """Place a new order on Robinhood."""
+        try:
+            # Convert our Order to Robinhood format
+            order_data = {
+                "symbol": order.symbol,
+                "side": order.side.value,
+                "type": order.order_type.value,
+                "quantity": str(order.quantity),
+                "time_in_force": order.time_in_force
+            }
+            
+            # Add optional fields
+            if order.price:
+                order_data["limit_price"] = str(order.price)
+            if order.stop_price:
+                order_data["stop_price"] = str(order.stop_price)
+            if order.client_order_id:
+                order_data["client_order_id"] = order.client_order_id
+            
+            # Convert to JSON string for signature
+            body = json.dumps(order_data)
+            
+            response = await self._make_request(
+                "POST",
+                "/api/v1/crypto/trading/orders/",
+                body=body
+            )
+            
+            if response.status_code == 201:
+                order_response = response.json()
+                order_id = order_response.get("id")
+                self.logger.info(f"Order placed successfully: {order_id}")
+                return order_id
+            else:
+                error_msg = response.text
+                self.logger.error(f"Failed to place order: {response.status_code} - {error_msg}")
+                raise Exception(f"Order placement failed: {error_msg}")
+                
+        except Exception as e:
+            self.logger.error(f"Error placing order: {e}")
+            raise
     
     async def get_order_status(self, order_id: str) -> Dict[str, Any]:
         """Get the status of an order."""
@@ -397,14 +453,137 @@ class RobinhoodConnector(MarketDataInterface):
         
         # TODO: Implement WebSocket subscription to Robinhood
         # For now, just store the callback
+    
+    # Implementation of ExecutionHandler abstract methods
+    
+    async def cancel_order(self, order_id: str) -> bool:
+        """Cancel an existing order."""
+        try:
+            response = await self._make_request(
+                "DELETE",
+                f"/api/v1/crypto/trading/orders/{order_id}"
+            )
+            
+            if response.status_code == 200:
+                self.logger.info(f"Order {order_id} cancelled successfully")
+                return True
+            else:
+                self.logger.error(f"Failed to cancel order {order_id}: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error cancelling order {order_id}: {e}")
+            return False
+    
+    async def get_position(self, symbol: str) -> Optional[Position]:
+        """Get position information for a symbol."""
+        try:
+            response = await self._make_request(
+                "GET",
+                f"/api/v1/crypto/trading/holdings/?asset_code={symbol}"
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("results"):
+                    holding = data["results"][0]
+                    return Position(
+                        symbol=holding.get("asset_code", ""),
+                        quantity=float(holding.get("quantity", 0)),
+                        market_value=float(holding.get("market_value", 0)),
+                        unrealized_pnl=float(holding.get("unrealized_pnl", 0)),
+                        realized_pnl=float(holding.get("realized_pnl", 0)),
+                        average_cost=float(holding.get("average_cost", 0)),
+                        current_price=float(holding.get("current_price", 0))
+                    )
+            return None
+                
+        except Exception as e:
+            self.logger.error(f"Error getting position for {symbol}: {e}")
+            return None
+    
+    async def get_all_positions(self) -> List[Position]:
+        """Get all current positions."""
+        try:
+            response = await self._make_request(
+                "GET",
+                "/api/v1/crypto/trading/holdings/"
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                positions = []
+                
+                for holding in data.get("results", []):
+                    position = Position(
+                        symbol=holding.get("asset_code", ""),
+                        quantity=float(holding.get("quantity", 0)),
+                        market_value=float(holding.get("market_value", 0)),
+                        unrealized_pnl=float(holding.get("unrealized_pnl", 0)),
+                        realized_pnl=float(holding.get("realized_pnl", 0)),
+                        average_cost=float(holding.get("average_cost", 0)),
+                        current_price=float(holding.get("current_price", 0))
+                    )
+                    positions.append(position)
+                
+                return positions
+            else:
+                self.logger.error(f"Failed to get positions: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting positions: {e}")
+            return []
+    
+    async def get_account_balance(self) -> AccountBalance:
+        """Get account balance information."""
+        try:
+            response = await self._make_request(
+                "GET",
+                "/api/v1/crypto/trading/accounts/"
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return AccountBalance(
+                    buying_power=float(data.get("buying_power", 0)),
+                    cash=float(data.get("buying_power", 0)),  # Robinhood doesn't separate cash
+                    portfolio_value=float(data.get("buying_power", 0)),  # Simplified
+                    currency=data.get("buying_power_currency", "USD")
+                )
+            else:
+                self.logger.error(f"Failed to get account balance: {response.status_code}")
+                return AccountBalance(0, 0, 0)
+                
+        except Exception as e:
+            self.logger.error(f"Error getting account balance: {e}")
+            return AccountBalance(0, 0, 0)
+    
+    async def get_orders(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get list of orders, optionally filtered by status."""
+        try:
+            params = {}
+            if status:
+                params["state"] = status
+            
+            response = await self._make_request(
+                "GET",
+                "/api/v1/crypto/trading/orders/",
+                params=params
+            )
+            
+            if response.status_code == 200:
+                return response.json().get("results", [])
+            else:
+                self.logger.error(f"Failed to get orders: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting orders: {e}")
+            return []
 
 
 # Factory function for creating connector instances
-def create_robinhood_connector(
-    api_key: str, 
-    private_key: str, 
-    public_key: str
-) -> RobinhoodConnector:
-    """Create a new Robinhood connector instance."""
-    auth = RobinhoodAuth(api_key, private_key, public_key)
-    return RobinhoodConnector(auth)
+def create_robinhood_handler(config: Dict[str, Any]) -> RobinhoodLiveHandler:
+    """Create a new Robinhood live trading handler instance."""
+    return RobinhoodLiveHandler(config)
