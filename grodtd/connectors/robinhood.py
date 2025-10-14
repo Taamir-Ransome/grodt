@@ -8,12 +8,20 @@ and order management.
 
 import asyncio
 import logging
-from datetime import datetime
+import base64
+import hashlib
+import hmac
+import time
+import json
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 import httpx
+import nacl.signing
 from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from grodtd.storage.interfaces import MarketDataInterface, OHLCVBar
 
 
@@ -56,34 +64,61 @@ class Position:
 
 
 class RobinhoodAuth:
-    """Handles Robinhood API authentication."""
+    """Handles Robinhood API authentication with signature-based auth."""
     
-    def __init__(self, api_key: str, api_secret: str, account_id: str):
+    def __init__(self, api_key: str, private_key: str, public_key: str):
         self.api_key = api_key
-        self.api_secret = api_secret
-        self.account_id = account_id
-        self.access_token: Optional[str] = None
-        self.refresh_token: Optional[str] = None
-        self.token_expires_at: Optional[datetime] = None
+        self.private_key = private_key
+        self.public_key = public_key
+        self.logger = logging.getLogger(__name__)
+        
+        # Convert base64 keys to nacl objects
+        try:
+            # The private key is 64 bytes (32-byte seed + 32-byte public key)
+            # We need to extract just the first 32 bytes for the seed
+            private_key_bytes = base64.b64decode(private_key)
+            self._public_key_bytes = base64.b64decode(public_key)
+            
+            # Extract the first 32 bytes as the seed
+            private_key_seed = private_key_bytes[:32]
+            
+            # Create signing key from the seed
+            self._signing_key = nacl.signing.SigningKey(private_key_seed)
+            self._verify_key = nacl.signing.VerifyKey(self._public_key_bytes)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize signing keys: {e}")
+            raise
     
-    async def authenticate(self) -> bool:
-        """Authenticate with Robinhood API."""
-        # TODO: Implement OAuth2 flow
-        # For now, return True as a stub
-        self.access_token = "stub_token"
-        self.token_expires_at = datetime.now()
-        return True
+    def generate_signature(self, path: str, method: str, body: str = "", timestamp: Optional[int] = None) -> str:
+        """Generate signature for API request."""
+        if timestamp is None:
+            timestamp = int(time.time())
+        
+        # Create message to sign
+        message = f"{self.api_key}{timestamp}{path}{method}{body}"
+        
+        # Sign the message
+        signed = self._signing_key.sign(message.encode("utf-8"))
+        
+        # Return base64 encoded signature
+        return base64.b64encode(signed.signature).decode("utf-8")
     
-    async def refresh_access_token(self) -> bool:
-        """Refresh the access token if needed."""
-        # TODO: Implement token refresh logic
-        return True
+    def get_auth_headers(self, path: str, method: str, body: str = "") -> Dict[str, str]:
+        """Get authentication headers for API request."""
+        timestamp = int(time.time())
+        signature = self.generate_signature(path, method, body, timestamp)
+        
+        return {
+            "x-api-key": self.api_key,
+            "x-timestamp": str(timestamp),
+            "x-signature": signature,
+            "Content-Type": "application/json; charset=utf-8"
+        }
     
     def is_token_valid(self) -> bool:
-        """Check if the current token is still valid."""
-        if not self.access_token or not self.token_expires_at:
-            return False
-        return datetime.now() < self.token_expires_at
+        """Check if authentication is valid (always true for API key auth)."""
+        return True
+    
 
 
 class RobinhoodConnector(MarketDataInterface):
@@ -91,10 +126,12 @@ class RobinhoodConnector(MarketDataInterface):
     
     def __init__(self, auth: RobinhoodAuth):
         self.auth = auth
-        self.base_url = "https://api.robinhood.com"
+        self.base_url = "https://trading.robinhood.com"
         self.client: Optional[httpx.AsyncClient] = None
         self.logger = logging.getLogger(__name__)
         self._subscriptions: Dict[str, Callable] = {}
+        self._rate_limit_delay = 0.5  # 500ms between requests
+        self._last_request_time = 0.0
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -106,19 +143,63 @@ class RobinhoodConnector(MarketDataInterface):
         await self.disconnect()
     
     async def connect(self):
-        """Initialize the HTTP client and authenticate."""
-        if not self.auth.is_token_valid():
-            await self.auth.authenticate()
-        
+        """Initialize the HTTP client."""
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {self.auth.access_token}",
-                "Content-Type": "application/json",
-            },
             timeout=30.0,
         )
         self.logger.info("Connected to Robinhood API")
+    
+    async def _rate_limit(self):
+        """Implement rate limiting between requests."""
+        import time
+        current_time = time.time()
+        time_since_last = current_time - self._last_request_time
+        
+        if time_since_last < self._rate_limit_delay:
+            sleep_time = self._rate_limit_delay - time_since_last
+            await asyncio.sleep(sleep_time)
+        
+        self._last_request_time = time.time()
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type((httpx.HTTPError, httpx.RequestError))
+    )
+    async def _make_request(self, method: str, endpoint: str, body: str = "", **kwargs) -> httpx.Response:
+        """Make a rate-limited request with retry logic and proper authentication."""
+        await self._rate_limit()
+        
+        if not self.client:
+            raise RuntimeError("Connector not connected. Call connect() first.")
+        
+        try:
+            # Get authentication headers
+            auth_headers = self.auth.get_auth_headers(endpoint, method, body)
+            
+            # Merge with any additional headers
+            headers = {**auth_headers, **kwargs.get('headers', {})}
+            kwargs['headers'] = headers
+            
+            response = await self.client.request(method, endpoint, **kwargs)
+            
+            # Handle rate limiting
+            if response.status_code == 429:
+                self.logger.warning("Rate limited, backing off...")
+                await asyncio.sleep(2)
+                raise httpx.HTTPError("Rate limited")
+            
+            # Handle authentication errors
+            if response.status_code == 401:
+                self.logger.error("Authentication failed - check your API key and signature")
+                raise httpx.HTTPError("Authentication failed")
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Request failed: {e}")
+            raise
     
     async def disconnect(self):
         """Close the HTTP client."""
@@ -126,28 +207,90 @@ class RobinhoodConnector(MarketDataInterface):
             await self.client.aclose()
             self.logger.info("Disconnected from Robinhood API")
     
-    async def get_instruments(self, symbols: List[str]) -> List[Dict[str, Any]]:
-        """Get instrument information for given symbols."""
-        # TODO: Implement actual API call
-        self.logger.info(f"Getting instruments for symbols: {symbols}")
-        return []
+    async def get_trading_pairs(self, symbols: List[str]) -> List[Dict[str, Any]]:
+        """Get trading pair information for given symbols."""
+        try:
+            # Build query parameters for multiple symbols
+            params = {}
+            for i, symbol in enumerate(symbols):
+                params[f"symbol"] = symbol  # Robinhood expects multiple symbol params
+            
+            response = await self._make_request(
+                "GET", 
+                "/api/v1/crypto/trading/trading_pairs/",
+                params=params
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("results", [])
+            else:
+                self.logger.error(f"Failed to get trading pairs: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting trading pairs: {e}")
+            return []
     
-    async def get_quotes(self, symbols: List[str]) -> List[Quote]:
-        """Get current market quotes for symbols."""
-        # TODO: Implement actual API call
-        self.logger.info(f"Getting quotes for symbols: {symbols}")
-        return []
+    async def get_best_bid_ask(self, symbols: List[str]) -> List[Quote]:
+        """Get current best bid/ask prices for symbols."""
+        try:
+            # Build query parameters for multiple symbols
+            params = {}
+            for symbol in symbols:
+                params["symbol"] = symbol  # Robinhood expects multiple symbol params
+            
+            response = await self._make_request(
+                "GET",
+                "/api/v1/crypto/marketdata/best_bid_ask/",
+                params=params
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                quotes = []
+                for quote_data in data.get("results", []):
+                    quote = Quote(
+                        symbol=quote_data.get("symbol", ""),
+                        bid_price=float(quote_data.get("bid_price", 0)),
+                        ask_price=float(quote_data.get("ask_price", 0)),
+                        bid_size=float(quote_data.get("bid_size", 0)),
+                        ask_size=float(quote_data.get("ask_size", 0)),
+                        timestamp=datetime.now()  # Best bid/ask doesn't have timestamp
+                    )
+                    quotes.append(quote)
+                return quotes
+            else:
+                self.logger.error(f"Failed to get best bid/ask: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting best bid/ask: {e}")
+            return []
     
-    async def get_historical_data(
-        self, 
-        symbol: str, 
-        interval: str = "1m", 
-        span: str = "day"
-    ) -> List[Dict[str, Any]]:
-        """Get historical OHLCV data for a symbol."""
-        # TODO: Implement actual API call
-        self.logger.info(f"Getting historical data for {symbol} ({interval}, {span})")
-        return []
+    async def get_estimated_price(self, symbol: str, side: str, quantity: str) -> List[Dict[str, Any]]:
+        """Get estimated price for a symbol and quantity."""
+        try:
+            response = await self._make_request(
+                "GET",
+                "/marketdata/api/v1/estimated_price/",
+                params={
+                    "symbol": symbol,
+                    "side": side,
+                    "quantity": quantity
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("results", [])
+            else:
+                self.logger.error(f"Failed to get estimated price: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting estimated price: {e}")
+            return []
     
     async def place_order(self, order: Order) -> str:
         """Place a new order."""
@@ -199,9 +342,15 @@ class RobinhoodConnector(MarketDataInterface):
         if not self.client:
             raise RuntimeError("Connector not connected. Call connect() first.")
         
-        # TODO: Implement actual API call to Robinhood
-        # For now, return empty list as placeholder
-        return []
+        try:
+            # For now, return empty list as Robinhood's new API doesn't have historical data endpoint
+            # In a real implementation, you'd need to use a different data source for historical data
+            self.logger.warning("Historical data not available in Robinhood Crypto API")
+            return []
+            
+        except Exception as e:
+            self.logger.error(f"Error getting historical data: {e}")
+            return []
     
     async def get_real_time_data(self, symbol: str) -> OHLCVBar:
         """Get current real-time OHLCV data for a symbol."""
@@ -210,16 +359,36 @@ class RobinhoodConnector(MarketDataInterface):
         if not self.client:
             raise RuntimeError("Connector not connected. Call connect() first.")
         
-        # TODO: Implement actual API call to Robinhood
-        # For now, return a placeholder bar
-        return OHLCVBar(
-            timestamp=datetime.now(),
-            open=0.0,
-            high=0.0,
-            low=0.0,
-            close=0.0,
-            volume=0.0
-        )
+        try:
+            # Get current best bid/ask
+            quotes = await self.get_best_bid_ask([symbol])
+            if not quotes:
+                raise RuntimeError(f"No quote data available for {symbol}")
+            
+            quote = quotes[0]
+            current_price = (quote.bid_price + quote.ask_price) / 2
+            
+            # Create OHLCV bar with current price
+            return OHLCVBar(
+                timestamp=datetime.now(),
+                open=current_price,
+                high=current_price,
+                low=current_price,
+                close=current_price,
+                volume=0.0  # Real-time volume not available from quotes
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error getting real-time data: {e}")
+            # Return a placeholder bar on error
+            return OHLCVBar(
+                timestamp=datetime.now(),
+                open=0.0,
+                high=0.0,
+                low=0.0,
+                close=0.0,
+                volume=0.0
+            )
     
     async def subscribe_to_updates(self, symbol: str, callback: Callable) -> None:
         """Subscribe to real-time data updates."""
@@ -233,9 +402,9 @@ class RobinhoodConnector(MarketDataInterface):
 # Factory function for creating connector instances
 def create_robinhood_connector(
     api_key: str, 
-    api_secret: str, 
-    account_id: str
+    private_key: str, 
+    public_key: str
 ) -> RobinhoodConnector:
     """Create a new Robinhood connector instance."""
-    auth = RobinhoodAuth(api_key, api_secret, account_id)
+    auth = RobinhoodAuth(api_key, private_key, public_key)
     return RobinhoodConnector(auth)

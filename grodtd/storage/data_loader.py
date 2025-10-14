@@ -79,16 +79,38 @@ class DataLoader:
         interval: str
     ) -> pd.DataFrame:
         """Fetch data from the API."""
-        # TODO: Implement actual API data fetching
-        # For now, return empty DataFrame with proper structure
         self.logger.info(f"Fetching data from API for {symbol}")
         
-        # Create empty DataFrame with proper structure
-        columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-        data = pd.DataFrame(columns=columns)
-        data['timestamp'] = pd.to_datetime(data['timestamp'])
-        
-        return data
+        try:
+            # Get historical data from connector
+            bars = await connector.get_historical_data(symbol, start_date, end_date, interval)
+            
+            if not bars:
+                self.logger.warning(f"No data returned for {symbol}")
+                # Return empty DataFrame with proper structure
+                columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                data = pd.DataFrame(columns=columns)
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                return data
+            
+            # Convert bars to DataFrame
+            data = self.convert_bars_to_dataframe(bars)
+            
+            # Validate the data
+            if not self.validate_ohlcv_data(data):
+                self.logger.error(f"Data validation failed for {symbol}")
+                raise ValueError("Data validation failed")
+            
+            self.logger.info(f"Successfully fetched {len(data)} records for {symbol}")
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Error fetching data from API: {e}")
+            # Return empty DataFrame on error
+            columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            data = pd.DataFrame(columns=columns)
+            data['timestamp'] = pd.to_datetime(data['timestamp'])
+            return data
     
     def _store_data(self, data: pd.DataFrame, file_path: Path):
         """Store data to Parquet file."""
