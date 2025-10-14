@@ -1,0 +1,39 @@
+# Backup Configuration for GRODT Trading System
+# This file configures automated backup and archival of trading data
+
+# Backup directory where backups will be stored
+backup_directory: "data/backups"
+
+# Retention policy (in days/weeks/months/years)
+retention_days: 7      # Keep daily backups for 7 days
+retention_weeks: 4     # Keep weekly backups for 4 weeks  
+retention_months: 12   # Keep monthly backups for 12 months
+retention_years: 3     # Keep yearly backups for 3 years
+
+# Compression algorithm for Parquet files
+# Options: snappy (fast), gzip (good compression), brotli (best compression)
+compression: "snappy"
+
+# Backup schedule (24-hour format)
+backup_time: "02:00"   # Run backup at 2:00 AM daily
+
+# Enable/disable automated backups
+enabled: true
+
+# Tables to include in backup
+tables_to_backup:
+  - "trades"        # Records every filled trade
+  - "orders"        # Tracks order lifecycle
+  - "positions"     # Current portfolio positions
+  - "equity_curve"  # Portfolio value timeseries
+
+# Backup integrity verification
+verify_integrity: true
+
+# Maximum backup size in MB (0 = no limit)
+max_backup_size_mb: 1000
+
+# Backup metadata (for documentation only)
+# description: "Automated backup of GRODT trading data"
+# version: "1.0"
+# created_by: "GRODT Backup System"

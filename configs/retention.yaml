@@ -1,0 +1,144 @@
+# Data Retention Configuration for GRODT Trading System
+# This file configures automated data retention and cleanup policies
+
+# Global retention settings
+global:
+  enabled: true
+  cleanup_schedule: "03:00"  # Run cleanup at 3:00 AM daily
+  dry_run: false            # Set to true for testing without actual deletion
+  max_storage_gb: 50        # Maximum storage usage before aggressive cleanup
+
+# Scheduler configuration
+scheduler:
+  enabled: true
+  cleanup_schedule: "03:00"  # Run cleanup at 3:00 AM daily
+  check_interval_minutes: 60  # Check every hour for cleanup time
+  max_cleanup_duration_hours: 4  # Maximum time for cleanup operation
+  backup_before_cleanup: true    # Create backup before cleanup
+  notification_channels: ["log", "console"]  # Notification channels
+  log_level: "INFO"             # Logging level
+  dry_run: false                # Set to true for testing
+
+# Data type-specific retention policies
+retention_policies:
+  # Critical data - preserve longer
+  trades:
+    enabled: true
+    retention_days: 365     # Keep for 1 year
+    retention_weeks: 52     # Keep weekly snapshots for 1 year
+    retention_months: 24    # Keep monthly snapshots for 2 years
+    retention_years: 7       # Keep yearly snapshots for 7 years
+    priority: "critical"
+    description: "Trade records - critical for compliance and analysis"
+    
+  orders:
+    enabled: true
+    retention_days: 365     # Keep for 1 year
+    retention_weeks: 52     # Keep weekly snapshots for 1 year
+    retention_months: 24    # Keep monthly snapshots for 2 years
+    retention_years: 7       # Keep yearly snapshots for 7 years
+    priority: "critical"
+    description: "Order lifecycle records - critical for compliance"
+    
+  positions:
+    enabled: true
+    retention_days: 90      # Keep for 3 months
+    retention_weeks: 26     # Keep weekly snapshots for 6 months
+    retention_months: 12    # Keep monthly snapshots for 1 year
+    retention_years: 3      # Keep yearly snapshots for 3 years
+    priority: "important"
+    description: "Current portfolio positions - important for analysis"
+    
+  # Important data - medium retention
+  equity_curve:
+    enabled: true
+    retention_days: 180     # Keep for 6 months
+    retention_weeks: 26     # Keep weekly snapshots for 6 months
+    retention_months: 12    # Keep monthly snapshots for 1 year
+    retention_years: 3      # Keep yearly snapshots for 3 years
+    priority: "important"
+    description: "Portfolio value timeseries - important for performance tracking"
+    
+  # Operational data - shorter retention
+  market_data:
+    enabled: true
+    retention_days: 30      # Keep for 1 month
+    retention_weeks: 8      # Keep weekly snapshots for 2 months
+    retention_months: 6     # Keep monthly snapshots for 6 months
+    retention_years: 1      # Keep yearly snapshots for 1 year
+    priority: "operational"
+    description: "OHLCV market data - operational for technical analysis"
+
+# Cleanup configuration
+cleanup:
+  # Batch processing settings
+  batch_size: 1000          # Process records in batches
+  max_cleanup_time_hours: 4 # Maximum time for cleanup operation
+  
+  # Safety settings
+  backup_before_cleanup: true    # Create backup before cleanup
+  verify_integrity: true         # Verify data integrity after cleanup
+  rollback_on_failure: true     # Rollback changes if cleanup fails
+  
+  # Logging and monitoring
+  log_cleanup_operations: true  # Log all cleanup operations
+  create_audit_trail: true      # Create audit trail for compliance
+  send_notifications: true      # Send notifications on cleanup completion
+
+# Storage monitoring
+storage_monitoring:
+  enabled: true
+  check_interval_hours: 6       # Check storage usage every 6 hours
+  warning_threshold_percent: 80 # Warn when 80% of max storage used
+  critical_threshold_percent: 95 # Critical alert at 95% usage
+  
+  # Storage optimization
+  auto_cleanup_on_warning: false # Don't auto-cleanup on warning
+  auto_cleanup_on_critical: true # Auto-cleanup on critical usage
+  
+  # Reporting
+  generate_reports: true        # Generate storage usage reports
+  report_frequency: "weekly"    # Generate reports weekly
+  include_trends: true          # Include usage trends in reports
+
+# Data integrity settings
+data_integrity:
+  verify_before_cleanup: true   # Verify data integrity before cleanup
+  checksum_verification: true   # Use checksums for integrity verification
+  backup_verification: true    # Verify backup integrity
+  
+  # Recovery settings
+  enable_recovery: true        # Enable data recovery procedures
+  recovery_window_days: 7      # Keep recovery data for 7 days
+  test_recovery_procedures: true # Test recovery procedures regularly
+
+# Notification settings
+notifications:
+  enabled: true
+  channels:
+    - "log"                     # Log to file
+    - "console"                 # Print to console
+  
+  # Notification triggers
+  on_cleanup_start: true        # Notify when cleanup starts
+  on_cleanup_complete: true     # Notify when cleanup completes
+  on_cleanup_failure: true      # Notify on cleanup failure
+  on_storage_warning: true      # Notify on storage warnings
+  on_storage_critical: true     # Notify on critical storage usage
+  
+  # Notification content
+  include_statistics: true      # Include cleanup statistics
+  include_storage_info: true    # Include storage usage information
+  include_error_details: true   # Include error details in notifications
+
+# Compliance and audit settings
+compliance:
+  audit_enabled: true           # Enable audit logging
+  audit_retention_days: 2555    # Keep audit logs for 7 years
+  log_data_access: true         # Log all data access
+  log_cleanup_decisions: true   # Log cleanup decision rationale
+  
+  # Compliance reporting
+  generate_compliance_reports: true # Generate compliance reports
+  report_frequency: "monthly"   # Generate compliance reports monthly
+  include_data_lineage: true    # Include data lineage in reports
