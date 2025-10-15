@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # GRODT Trading Bot metrics
+  - job_name: 'grodt-trading-bot'
+    static_configs:
+      - targets: ['grodt:9090']  # Using service name from docker-compose
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+    scrape_timeout: 10s
+    honor_labels: true
+    honor_timestamps: true
+
+  # System metrics (if available)
+  - job_name: 'grodt-system'
+    static_configs:
+      - targets: ['grodt:9090']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    params:
+      format: ['prometheus']
