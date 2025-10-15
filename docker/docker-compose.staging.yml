@@ -1,0 +1,82 @@
+version: "3.8"
+
+# Staging environment overrides
+services:
+  grodt:
+    environment:
+      - ENV=staging
+      - DATABASE_URL=sqlite:///app/data/grodt_staging.db
+      - LOG_LEVEL=INFO
+      - PYTHONPATH=/app
+      - PROMETHEUS_HOST=prometheus
+      - PROMETHEUS_PORT=9090
+      - GRAFANA_HOST=grafana
+      - GRAFANA_PORT=3000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          cpus: "0.75"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+      replicas: 1
+
+  prometheus:
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+      - "--storage.tsdb.retention.time=15d" # Medium retention for staging
+      - "--storage.tsdb.retention.size=5GB"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  grafana:
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-staging_admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-staging_admin}
+      - GF_DATABASE_TYPE=sqlite3
+      - GF_DATABASE_PATH=/var/lib/grafana/grafana_staging.db
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=info
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  grodt_data:
+    driver: local
+  grodt_logs:
+    driver: local
+  grodt_configs:
+    driver: local
+
+networks:
+  grodt-network:
+    driver: bridge

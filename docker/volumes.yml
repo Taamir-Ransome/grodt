@@ -1,0 +1,97 @@
+version: '3.8'
+
+# Volume management configuration for GRODT system
+volumes:
+  # Application data volumes
+  grodt_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_data
+    labels:
+      - "grodt.volume.type=data"
+      - "grodt.volume.purpose=application"
+      - "grodt.volume.backup=required"
+
+  grodt_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_logs
+    labels:
+      - "grodt.volume.type=logs"
+      - "grodt.volume.purpose=logging"
+      - "grodt.volume.retention=30d"
+
+  grodt_configs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_configs
+    labels:
+      - "grodt.volume.type=config"
+      - "grodt.volume.purpose=configuration"
+      - "grodt.volume.backup=optional"
+
+  # Monitoring data volumes
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_prometheus_data
+    labels:
+      - "grodt.volume.type=metrics"
+      - "grodt.volume.purpose=monitoring"
+      - "grodt.volume.retention=30d"
+      - "grodt.volume.backup=required"
+
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_grafana_data
+    labels:
+      - "grodt.volume.type=dashboards"
+      - "grodt.volume.purpose=visualization"
+      - "grodt.volume.backup=optional"
+
+  # Backup volumes
+  grodt_backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_backups
+    labels:
+      - "grodt.volume.type=backup"
+      - "grodt.volume.purpose=backup"
+      - "grodt.volume.retention=90d"
+
+  # Cache volumes
+  grodt_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_cache
+    labels:
+      - "grodt.volume.type=cache"
+      - "grodt.volume.purpose=caching"
+      - "grodt.volume.cleanup=daily"
+
+  # Temporary volumes
+  grodt_temp:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/grodt_temp
+    labels:
+      - "grodt.volume.type=temp"
+      - "grodt.volume.purpose=temporary"
+      - "grodt.volume.cleanup=hourly"

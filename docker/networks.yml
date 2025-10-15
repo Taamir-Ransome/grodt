@@ -1,0 +1,55 @@
+version: '3.8'
+
+# Custom network configurations for GRODT system
+networks:
+  # Main application network
+  grodt-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: grodt-bridge
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+          ip_range: 172.20.1.0/24
+    labels:
+      - "grodt.network.type=application"
+      - "grodt.network.security=internal"
+
+  # Monitoring network (isolated)
+  grodt-monitoring:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: grodt-monitoring
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+          ip_range: 172.21.1.0/24
+    labels:
+      - "grodt.network.type=monitoring"
+      - "grodt.network.security=isolated"
+
+  # External network (for public access)
+  grodt-external:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: grodt-external
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
+          ip_range: 172.22.1.0/24
+    labels:
+      - "grodt.network.type=external"
+      - "grodt.network.security=public"

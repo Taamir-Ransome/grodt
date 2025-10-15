@@ -1,0 +1,78 @@
+version: '3.8'
+
+# Volume monitoring service for GRODT system
+services:
+  volume-monitor:
+    image: alpine:latest
+    command: >
+      sh -c "
+        apk add --no-cache dcron &&
+        echo '0 */6 * * * /scripts/volume-cleanup.sh' > /etc/crontabs/root &&
+        echo '0 2 * * * /scripts/volume-backup.sh' >> /etc/crontabs/root &&
+        crond -f
+      "
+    volumes:
+      - grodt_data:/volumes/data:ro
+      - grodt_logs:/volumes/logs:ro
+      - grodt_configs:/volumes/configs:ro
+      - prometheus_data:/volumes/prometheus:ro
+      - grafana_data:/volumes/grafana:ro
+      - grodt_backups:/backups:rw
+      - ./scripts:/scripts:ro
+    environment:
+      - BACKUP_DIR=/backups
+      - RETENTION_DAYS=30
+      - CLEANUP_THRESHOLD=80
+    restart: unless-stopped
+    networks:
+      - grodt-network
+    labels:
+      - "grodt.service.type=monitoring"
+      - "grodt.service.purpose=volume-management"
+
+  volume-cleanup:
+    image: alpine:latest
+    command: >
+      sh -c "
+        apk add --no-cache findutils &&
+        while true; do
+          echo 'Running volume cleanup...' &&
+          find /volumes -name '*.tmp' -mtime +1 -delete &&
+          find /volumes -name '*.log' -mtime +7 -delete &&
+          find /backups -name '*.tar.gz' -mtime +30 -delete &&
+          sleep 3600
+        done
+      "
+    volumes:
+      - grodt_data:/volumes/data:rw
+      - grodt_logs:/volumes/logs:rw
+      - grodt_configs:/volumes/configs:rw
+      - prometheus_data:/volumes/prometheus:rw
+      - grafana_data:/volumes/grafana:rw
+      - grodt_backups:/backups:rw
+    environment:
+      - RETENTION_DAYS=30
+    restart: unless-stopped
+    networks:
+      - grodt-network
+    labels:
+      - "grodt.service.type=cleanup"
+      - "grodt.service.purpose=volume-maintenance"
+
+volumes:
+  grodt_data:
+    driver: local
+  grodt_logs:
+    driver: local
+  grodt_configs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  grodt_backups:
+    driver: local
+
+networks:
+  grodt-network:
+    driver: bridge

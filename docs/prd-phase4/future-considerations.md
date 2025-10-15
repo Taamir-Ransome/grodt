@@ -1,26 +1,27 @@
-Excellent. This is the right way to think—you've defined the major strategic pillars for the future. Now, let's flesh this out.
-
-We need to treat this section not just as a list, but as a research and development roadmap for discovering and exploiting "ghost patterns." The goal is to build a system that can find non-obvious, statistically-backed edges that others miss.
-
-Here is a comprehensive expansion of your future considerations, designed to guide the evolution of GRODT into a true quant system.
-
----
-
-### ## Expanded Future Considerations: A Roadmap for Manufacturing Alpha
+# Expanded Future Considerations: A Roadmap for Manufacturing Alpha
 
 This document outlines the advanced R&D paths for GRODT, focusing on the discovery and execution of "ghost patterns"—complex, statistically significant market phenomena.
 
-### ### Phase 5: The Advanced Intelligence Layer
+---
+
+### ## Phase 5: The Advanced Intelligence Layer
 
 The goal of this phase is to evolve beyond simple predictive models and into a system that can understand and act on deep, multi-dimensional market patterns.
 
 * **Data Sources for Ghost Hunting (Expanding "Alternative Data")**
+    * **Prediction Markets as an Alpha Source:** We will integrate data from real-money prediction markets to act as a powerful leading indicator for real-world events that impact financial assets. These platforms often represent the most unfiltered, financially-incentivized "wisdom of the crowd."
+        * **Platforms**: Initial integration will target **PolyMarket** due to its crypto-native structure and API accessibility. We will also plan for future integration with **Kalshi**, a regulated US-based platform, for events tied more closely to the traditional economy.
+        * **Specifics**: The ML Meta-Controller will ingest real-time odds (prices) and volume from these markets. A sudden, high-volume shift in the odds for an event like "Will the ETH ETF be approved?" will be treated as a high-priority "ghost pattern" to inform our trading on ETH itself.
+
     * **Market Microstructure Data:** We must go deeper than candles. This involves analyzing the L1/L2 order book to find ghosts in supply and demand.
         * **Specifics**: Real-time trade flow imbalances (e.g., more market buys than sells), bid/ask spread dynamics, and order book depth changes. These are the direct fingerprints of other market participants.
+
     * **On-Chain Analytics (Crypto-Native Ghosts):** The blockchain itself is a rich source of predictive data.
         * **Specifics**: Tracking whale wallet movements, exchange inflow/outflow, network transaction fees (gas), and smart contract activity to gauge underlying network health and sentiment.
+
     * **Unstructured & NLP-Driven Data:** Ghosts can appear in language before they appear in price.
         * **Specifics**: Real-time NLP analysis of specific, high-signal Twitter/X accounts, developer Telegram channels, Reddit threads, and even SEC filings to detect subtle shifts in sentiment or intent.
+
     * **Inter-Market Correlation Analysis:** The ghost causing a move in BTC might not be in the BTC market itself.
         * **Specifics**: Modeling the dynamic correlation between crypto assets, the DXY (US Dollar Index), and traditional market futures (like the NASDAQ 100) to find leading/lagging relationships.
 

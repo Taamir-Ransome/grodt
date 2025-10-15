@@ -1,0 +1,111 @@
+version: "3.8"
+
+# Development environment overrides
+services:
+  grodt:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+      - "5678:5678" # Debug port
+    volumes:
+      - ../data:/app/data:rw
+      - ../logs:/app/logs:rw
+      - ../configs:/app/configs:ro
+      - ../grodtd:/app/grodtd:ro # Mount source for hot reload
+    environment:
+      - ENV=dev
+      - DATABASE_URL=sqlite:///app/data/grodt_dev.db
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+      - PROMETHEUS_HOST=prometheus
+      - PROMETHEUS_PORT=9090
+      - GRAFANA_HOST=grafana
+      - GRAFANA_PORT=3000
+      - DEBUG=true
+      - RELOAD=true
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - grodt-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+  prometheus:
+    ports:
+      - "9091:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+      - "--storage.tsdb.retention.time=7d" # Shorter retention for dev
+      - "--storage.tsdb.retention.size=1GB"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+
+  grafana:
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=dev_admin
+      - GF_SECURITY_ADMIN_USER=dev_admin
+      - GF_DATABASE_TYPE=sqlite3
+      - GF_DATABASE_PATH=/var/lib/grafana/grafana_dev.db
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=debug
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  grodt_data:
+    driver: local
+  grodt_logs:
+    driver: local
+  grodt_configs:
+    driver: local
+
+networks:
+  grodt-network:
+    driver: bridge

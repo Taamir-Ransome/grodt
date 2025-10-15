@@ -3,6 +3,8 @@ Flask web application for GRODT with analytics endpoints.
 """
 
 import logging
+import os
+import structlog
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from flask import Flask, jsonify, request
@@ -13,13 +15,46 @@ from grodtd.regime.service import get_regime_service, RegimeType
 from grodtd.monitoring.metrics_endpoint import create_metrics_endpoint
 
 
+def configure_logging():
+    """Configure structured logging for containerized environment."""
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    
+    # Configure structlog for structured JSON logging
+    structlog.configure(
+        processors=[
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.processors.JSONRenderer()
+        ],
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+    
+    # Configure standard logging
+    logging.basicConfig(
+        level=getattr(logging, log_level),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+
 class GRODTWebApp:
     """GRODT Flask web application with analytics endpoints."""
     
     def __init__(self, db_path: str):
+        # Configure logging first
+        configure_logging()
+        
         self.app = Flask(__name__)
         self.db_path = db_path
-        self.logger = logging.getLogger(__name__)
+        self.logger = structlog.get_logger(__name__)
         
         # Initialize services
         self.regime_service = get_regime_service()
@@ -32,19 +67,92 @@ class GRODTWebApp:
         # Register routes
         self._register_routes()
         
-        self.logger.info("GRODT web application initialized")
+        self.logger.info("GRODT web application initialized", 
+                        db_path=db_path,
+                        service="grodt-web")
     
     def _register_routes(self):
         """Register all API routes."""
         
         @self.app.route('/health', methods=['GET'])
         def health_check():
-            """Health check endpoint."""
-            return jsonify({
-                'status': 'healthy',
-                'timestamp': datetime.now().isoformat(),
-                'service': 'grodt-analytics'
-            })
+            """Health check endpoint for container health checks."""
+            try:
+                # Basic health check
+                health_status = {
+                    'status': 'healthy',
+                    'timestamp': datetime.now().isoformat(),
+                    'service': 'grodt-analytics',
+                    'version': '1.0.0',
+                    'environment': os.getenv('ENV', 'development')
+                }
+                
+                # Check database connectivity
+                try:
+                    # Simple database check
+                    self.analytics_service.get_service_status()
+                    health_status['database'] = 'connected'
+                except Exception as e:
+                    health_status['database'] = 'error'
+                    health_status['database_error'] = str(e)
+                    health_status['status'] = 'degraded'
+                
+                # Check metrics endpoint
+                try:
+                    self.metrics_endpoint.get_collection_status()
+                    health_status['metrics'] = 'available'
+                except Exception as e:
+                    health_status['metrics'] = 'error'
+                    health_status['metrics_error'] = str(e)
+                
+                status_code = 200 if health_status['status'] == 'healthy' else 503
+                return jsonify(health_status), status_code
+                
+            except Exception as e:
+                self.logger.error("Health check failed", error=str(e))
+                return jsonify({
+                    'status': 'unhealthy',
+                    'timestamp': datetime.now().isoformat(),
+                    'error': str(e)
+                }), 503
+        
+        @self.app.route('/ready', methods=['GET'])
+        def readiness_check():
+            """Readiness probe for container orchestration."""
+            try:
+                # Check if all services are ready
+                ready_status = {
+                    'ready': True,
+                    'timestamp': datetime.now().isoformat(),
+                    'checks': {}
+                }
+                
+                # Check database
+                try:
+                    self.analytics_service.get_service_status()
+                    ready_status['checks']['database'] = 'ready'
+                except Exception as e:
+                    ready_status['checks']['database'] = 'not_ready'
+                    ready_status['ready'] = False
+                
+                # Check metrics
+                try:
+                    self.metrics_endpoint.get_collection_status()
+                    ready_status['checks']['metrics'] = 'ready'
+                except Exception as e:
+                    ready_status['checks']['metrics'] = 'not_ready'
+                    ready_status['ready'] = False
+                
+                status_code = 200 if ready_status['ready'] else 503
+                return jsonify(ready_status), status_code
+                
+            except Exception as e:
+                self.logger.error("Readiness check failed", error=str(e))
+                return jsonify({
+                    'ready': False,
+                    'timestamp': datetime.now().isoformat(),
+                    'error': str(e)
+                }), 503
         
         @self.app.route('/analytics/regime-performance', methods=['GET'])
         def get_regime_performance():
@@ -89,7 +197,7 @@ class GRODTWebApp:
                 })
                 
             except Exception as e:
-                self.logger.error(f"Error in regime performance endpoint: {e}")
+                self.logger.error("Error in regime performance endpoint", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -138,7 +246,7 @@ class GRODTWebApp:
                 })
                 
             except Exception as e:
-                self.logger.error(f"Error in regime accuracy endpoint: {e}")
+                self.logger.error("Error in regime accuracy endpoint", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -155,7 +263,7 @@ class GRODTWebApp:
                 })
                 
             except Exception as e:
-                self.logger.error(f"Error getting service status: {e}")
+                self.logger.error("Error getting service status", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -205,7 +313,7 @@ class GRODTWebApp:
                     }), 500
                 
             except Exception as e:
-                self.logger.error(f"Error updating trade performance: {e}")
+                self.logger.error("Error updating trade performance", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -267,7 +375,7 @@ class GRODTWebApp:
                     }), 500
                 
             except Exception as e:
-                self.logger.error(f"Error updating regime accuracy: {e}")
+                self.logger.error("Error updating regime accuracy", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -283,7 +391,7 @@ class GRODTWebApp:
             try:
                 return self.metrics_endpoint.get_metrics_response()
             except Exception as e:
-                self.logger.error(f"Error getting metrics: {e}")
+                self.logger.error("Error getting metrics", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -303,7 +411,7 @@ class GRODTWebApp:
                     'timestamp': datetime.now().isoformat()
                 })
             except Exception as e:
-                self.logger.error(f"Error getting metrics status: {e}")
+                self.logger.error("Error getting metrics status", error=str(e))
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
@@ -315,9 +423,12 @@ class GRODTWebApp:
         # In practice, you'd filter the database query results
         return data
     
-    def run(self, host='0.0.0.0', port=5000, debug=False):
+    def run(self, host='0.0.0.0', port=8000, debug=False):
         """Run the Flask application."""
-        self.logger.info(f"Starting GRODT web application on {host}:{port}")
+        self.logger.info("Starting GRODT web application", 
+                        host=host, 
+                        port=port, 
+                        debug=debug)
         self.app.run(host=host, port=port, debug=debug)
 
 
@@ -327,11 +438,23 @@ def create_app(db_path: str) -> Flask:
     return web_app.app
 
 
-if __name__ == "__main__":
-    # Default database path
-    db_path = "data/grodt.db"
+def main():
+    """Main entry point for containerized application."""
+    # Get database path from environment or use default
+    db_path = os.getenv('DATABASE_URL', 'sqlite:///app/data/grodt.db')
+    if db_path.startswith('sqlite:///'):
+        db_path = db_path.replace('sqlite:///', '')
     
     # Create and run the application
-    app = create_app(db_path)
     web_app = GRODTWebApp(db_path)
-    web_app.run(debug=True)
+    
+    # Get configuration from environment
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', '8000'))
+    debug = os.getenv('ENV', 'production') == 'development'
+    
+    web_app.run(host=host, port=port, debug=debug)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,69 @@
+# Docker-specific configuration for GRODT trading system
+
+# Application settings
+app:
+  name: "grodt-trading"
+  version: "1.0.0"
+  environment: "production"
+  debug: false
+
+# Server configuration
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  timeout: 30
+
+# Database configuration
+database:
+  url: "sqlite:///app/data/grodt.db"
+  pool_size: 10
+  max_overflow: 20
+  pool_pre_ping: true
+  echo: false
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "json"
+  structured: true
+  max_size: "10MB"
+  max_files: 3
+  path: "/app/logs"
+
+# Security settings
+security:
+  cors_origins: ["*"]
+  max_content_length: 16777216  # 16MB
+  rate_limit: "1000 per hour"
+  
+# Health check configuration
+health:
+  timeout: 10
+  interval: 30
+  retries: 3
+  start_period: 40
+
+# Monitoring configuration
+monitoring:
+  metrics_enabled: true
+  metrics_port: 9090
+  prometheus_enabled: true
+  health_check_enabled: true
+
+# Performance settings
+performance:
+  max_workers: 4
+  worker_timeout: 30
+  keepalive_timeout: 5
+  max_requests: 1000
+  max_requests_jitter: 100
+
+# Container-specific settings
+container:
+  user: "grodt"
+  group: "grodt"
+  working_directory: "/app"
+  data_directory: "/app/data"
+  logs_directory: "/app/logs"
+  config_directory: "/app/configs"

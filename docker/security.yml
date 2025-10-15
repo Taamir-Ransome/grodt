@@ -1,0 +1,57 @@
+version: '3.8'
+
+# Security configurations for GRODT system
+services:
+  # Security monitoring service
+  security-monitor:
+    image: alpine:latest
+    command: >
+      sh -c "
+        apk add --no-cache iptables &&
+        iptables -A INPUT -i eth0 -p tcp --dport 22 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 443 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 8000 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 3000 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 9090 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -p tcp --dport 9091 -j ACCEPT &&
+        iptables -A INPUT -i eth0 -j DROP &&
+        tail -f /dev/null
+      "
+    privileged: true
+    networks:
+      - grodt-network
+    restart: unless-stopped
+    labels:
+      - "grodt.security.monitor=true"
+
+  # Network security scanner
+  security-scanner:
+    image: alpine:latest
+    command: >
+      sh -c "
+        apk add --no-cache nmap netcat-openbsd &&
+        while true; do
+          echo 'Scanning network security...' &&
+          nmap -sn 172.20.0.0/16 &&
+          sleep 300
+        done
+      "
+    networks:
+      - grodt-network
+    restart: unless-stopped
+    labels:
+      - "grodt.security.scanner=true"
+
+networks:
+  grodt-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: grodt-bridge
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
