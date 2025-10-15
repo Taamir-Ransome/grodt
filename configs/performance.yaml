@@ -1,0 +1,218 @@
+# Performance Monitoring Configuration
+# GRODT Trading System Performance Monitoring Settings
+
+# Performance monitoring system configuration
+performance:
+  # Monitoring intervals (in seconds)
+  collection_interval: 30
+  analysis_interval: 300  # 5 minutes
+  report_interval: 3600   # 1 hour
+  
+  # Performance thresholds
+  thresholds:
+    # CPU thresholds (percentage)
+    cpu_critical: 95.0
+    cpu_high: 85.0
+    cpu_medium: 75.0
+    
+    # Memory thresholds (percentage)
+    memory_critical: 95.0
+    memory_high: 85.0
+    memory_medium: 75.0
+    
+    # Disk thresholds (percentage)
+    disk_critical: 95.0
+    disk_high: 85.0
+    disk_medium: 75.0
+    
+    # Response time thresholds (milliseconds)
+    response_time_critical: 5000.0
+    response_time_high: 2000.0
+    response_time_medium: 1000.0
+    
+    # Database query time thresholds (milliseconds)
+    query_time_critical: 1000.0
+    query_time_high: 500.0
+    query_time_medium: 200.0
+    
+    # Trading operation thresholds (milliseconds)
+    order_processing_critical: 1000.0
+    order_processing_high: 500.0
+    signal_generation_critical: 2000.0
+    signal_generation_high: 1000.0
+  
+  # Performance monitoring overhead limits
+  overhead_limits:
+    max_overhead_ms: 1.0        # Maximum 1ms overhead
+    max_resource_percent: 5.0   # Maximum 5% resource usage
+  
+  # Data retention settings
+  retention:
+    max_history_size: 1000       # Maximum number of metrics to keep in memory
+    history_cleanup_interval: 3600  # Cleanup interval in seconds
+    archive_old_data: true       # Archive old data to disk
+  
+  # Trend analysis settings
+  trend_analysis:
+    window_hours: 24             # Time window for trend analysis
+    min_samples_for_trend: 10   # Minimum samples required for trend analysis
+    confidence_threshold: 0.7   # Minimum confidence for trend detection
+  
+  # Alerting settings
+  alerting:
+    enable_alerts: true
+    alert_cooldown_seconds: 300  # 5 minutes cooldown between alerts
+    max_alerts_per_hour: 10      # Maximum alerts per hour
+    
+    # Alert severity mapping
+    severity_mapping:
+      critical: "immediate"
+      high: "urgent"
+      medium: "normal"
+      low: "low"
+  
+  # Performance reporting
+  reporting:
+    enable_auto_reports: true
+    report_schedule: "0 */6 * * *"  # Every 6 hours
+    report_retention_days: 30
+    
+    # Report types
+    report_types:
+      - "summary"
+      - "trends"
+      - "bottlenecks"
+      - "regression"
+  
+  # Integration settings
+  integration:
+    # Prometheus integration
+    prometheus:
+      enabled: true
+      metrics_path: "/metrics"
+      port: 9090
+    
+    # Grafana integration
+    grafana:
+      enabled: true
+      dashboard_refresh_interval: 30
+      auto_create_dashboards: true
+    
+    # Alerting system integration
+    alerting_system:
+      enabled: true
+      integration_type: "webhook"  # or "api"
+      webhook_url: "http://localhost:8080/alerts"
+  
+  # Performance optimization
+  optimization:
+    # Enable performance optimizations
+    enable_optimizations: true
+    
+    # Caching settings
+    cache:
+      enabled: true
+      cache_size_mb: 100
+      cache_ttl_seconds: 300
+    
+    # Sampling settings for high-frequency metrics
+    sampling:
+      enabled: true
+      sample_rate: 0.1  # Sample 10% of high-frequency metrics
+      min_interval_seconds: 1.0
+  
+  # System resource monitoring
+  system_monitoring:
+    # CPU monitoring
+    cpu:
+      enabled: true
+      monitoring_interval: 1.0  # seconds
+      include_per_core: false   # Monitor overall CPU usage only
+    
+    # Memory monitoring
+    memory:
+      enabled: true
+      monitoring_interval: 1.0  # seconds
+      include_swap: true
+    
+    # Disk monitoring
+    disk:
+      enabled: true
+      monitoring_interval: 5.0  # seconds
+      monitor_all_partitions: false
+      partitions_to_monitor: ["/"]
+    
+    # Network monitoring
+    network:
+      enabled: true
+      monitoring_interval: 5.0  # seconds
+      include_loopback: false
+  
+  # Application performance monitoring
+  application_monitoring:
+    # Request tracking
+    request_tracking:
+      enabled: true
+      track_response_times: true
+      track_throughput: true
+      track_error_rates: true
+    
+    # Database monitoring
+    database_monitoring:
+      enabled: true
+      track_query_times: true
+      track_connection_count: true
+      track_slow_queries: true
+      slow_query_threshold_ms: 100
+    
+    # Trading operation monitoring
+    trading_monitoring:
+      enabled: true
+      track_order_processing: true
+      track_signal_generation: true
+      track_strategy_execution: true
+  
+  # Performance testing
+  testing:
+    # Enable performance testing
+    enabled: true
+    
+    # Load testing settings
+    load_testing:
+      enabled: true
+      max_concurrent_requests: 100
+      test_duration_seconds: 300
+    
+    # Stress testing settings
+    stress_testing:
+      enabled: true
+      resource_limits:
+        max_cpu_percent: 90
+        max_memory_percent: 90
+        max_disk_percent: 95
+  
+  # Logging and debugging
+  logging:
+    # Performance monitoring logs
+    log_level: "INFO"
+    log_performance_metrics: true
+    log_bottlenecks: true
+    log_trends: true
+    
+    # Debug settings
+    debug:
+      enabled: false
+      log_detailed_metrics: false
+      log_analysis_steps: false
+  
+  # Security settings
+  security:
+    # API security
+    api_auth_required: false
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 60
+    
+    # Data privacy
+    anonymize_metrics: false
+    encrypt_sensitive_data: true
