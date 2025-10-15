@@ -1,0 +1,98 @@
+# GRODT Alerting System Configuration
+
+# Global alerting settings
+alerting:
+  enabled: true
+  evaluation_interval: 30  # seconds
+  max_alerts_per_minute: 10
+  alert_retention_days: 30
+  
+  # Default notification channels
+  default_channels:
+    - email
+    - telegram
+  
+  # Alert escalation settings
+  escalation:
+    enabled: true
+    escalation_delay: 300  # 5 minutes
+    escalation_channels:
+      - email
+      - telegram
+
+# Notification channel configurations
+notifications:
+  email:
+    enabled: true
+    from_email: "alerts@mail.wraith-protocol.com"
+    rate_limit_per_minute: 60
+    template_dir: "templates/email"
+    
+  telegram:
+    enabled: true
+    rate_limit_per_minute: 30
+    parse_mode: "Markdown"
+    
+  # Future channels
+  webhook:
+    enabled: false
+    rate_limit_per_minute: 100
+
+# Alert rule categories
+categories:
+  system:
+    description: "System health and performance alerts"
+    default_severity: "high"
+    channels: ["email", "telegram"]
+    
+  trading:
+    description: "Trading performance and risk alerts"
+    default_severity: "medium"
+    channels: ["email", "telegram"]
+    
+  regime:
+    description: "Market regime change alerts"
+    default_severity: "medium"
+    channels: ["email", "telegram"]
+    
+  security:
+    description: "Security and authentication alerts"
+    default_severity: "critical"
+    channels: ["email", "telegram"]
+
+# Alert suppression settings
+suppression:
+  enabled: true
+  maintenance_windows:
+    - name: "daily_maintenance"
+      start_time: "02:00"
+      end_time: "03:00"
+      timezone: "UTC"
+      suppress_categories: ["system"]
+      
+  # Suppress alerts during known maintenance periods
+  scheduled_maintenance:
+    - start: "2024-01-01T00:00:00Z"
+      end: "2024-01-01T06:00:00Z"
+      description: "Database maintenance"
+      suppress_categories: ["system", "trading"]
+
+# Alert acknowledgment settings
+acknowledgment:
+  required_for_severity: ["high", "critical"]
+  auto_acknowledge_after: 3600  # 1 hour
+  reminder_interval: 1800  # 30 minutes
+  
+# Alert resolution settings
+resolution:
+  auto_resolve_after: 86400  # 24 hours
+  require_confirmation: true
+  
+# Alert testing settings
+testing:
+  enabled: true
+  test_interval: 3600  # 1 hour
+  test_channels: ["email", "telegram"]
+  test_recipients:
+    email: "test@mail.wraith-protocol.com"
+    telegram: "test_chat_id"

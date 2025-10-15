@@ -1,0 +1,243 @@
+# GRODT Alert Rules Configuration
+
+# System Health Alerts
+system_alerts:
+  - name: "high_cpu_usage"
+    description: "CPU usage exceeds threshold"
+    severity: "high"
+    metric_name: "system_cpu_usage_percent"
+    threshold: 80.0
+    operator: "gt"
+    duration: 300  # 5 minutes
+    labels:
+      cpu_type: "total"
+    notification_channels: ["email", "telegram"]
+    category: "system"
+    
+  - name: "high_memory_usage"
+    description: "Memory usage exceeds threshold"
+    severity: "high"
+    metric_name: "system_memory_usage_percent"
+    threshold: 85.0
+    operator: "gt"
+    duration: 300
+    labels:
+      memory_type: "total"
+    notification_channels: ["email", "telegram"]
+    category: "system"
+    
+  - name: "high_disk_usage"
+    description: "Disk usage exceeds threshold"
+    severity: "medium"
+    metric_name: "system_disk_usage_percent"
+    threshold: 90.0
+    operator: "gt"
+    duration: 600  # 10 minutes
+    labels:
+      disk_type: "used"
+      mount_point: "/"
+    notification_channels: ["email", "telegram"]
+    category: "system"
+    
+  - name: "api_error_rate_high"
+    description: "API error rate is too high"
+    severity: "high"
+    metric_name: "api_errors_total"
+    threshold: 10.0
+    operator: "gt"
+    duration: 300
+    labels: {}
+    notification_channels: ["email", "telegram"]
+    category: "system"
+    
+  - name: "database_connection_failure"
+    description: "Database connection failures detected"
+    severity: "critical"
+    metric_name: "database_errors_total"
+    threshold: 1.0
+    operator: "gt"
+    duration: 60
+    labels:
+      error_type: "connection"
+    notification_channels: ["email", "telegram"]
+    category: "system"
+
+# Trading Performance Alerts
+trading_alerts:
+  - name: "high_drawdown"
+    description: "Portfolio drawdown exceeds threshold"
+    severity: "high"
+    metric_name: "trading_drawdown_current"
+    threshold: 10.0
+    operator: "gt"
+    duration: 300
+    labels:
+      strategy: "default"
+      symbol: "total"
+    notification_channels: ["email", "telegram"]
+    category: "trading"
+    
+  - name: "extreme_drawdown"
+    description: "Portfolio drawdown exceeds critical threshold"
+    severity: "critical"
+    metric_name: "trading_drawdown_current"
+    threshold: 20.0
+    operator: "gt"
+    duration: 60
+    labels:
+      strategy: "default"
+      symbol: "total"
+    notification_channels: ["email", "telegram"]
+    category: "trading"
+    
+  - name: "low_hit_rate"
+    description: "Trading hit rate is below threshold"
+    severity: "medium"
+    metric_name: "trading_hit_rate"
+    threshold: 40.0
+    operator: "lt"
+    duration: 1800  # 30 minutes
+    labels:
+      strategy: "default"
+      symbol: "total"
+    notification_channels: ["email", "telegram"]
+    category: "trading"
+    
+  - name: "negative_sharpe_ratio"
+    description: "Sharpe ratio is negative"
+    severity: "medium"
+    metric_name: "trading_sharpe_ratio"
+    threshold: 0.0
+    operator: "lt"
+    duration: 3600  # 1 hour
+    labels:
+      strategy: "default"
+      symbol: "total"
+      time_window: "30d"
+    notification_channels: ["email", "telegram"]
+    category: "trading"
+    
+  - name: "large_pnl_loss"
+    description: "Large PnL loss detected"
+    severity: "high"
+    metric_name: "trading_pnl_per_trade"
+    threshold: -1000.0
+    operator: "lt"
+    duration: 0  # Immediate
+    labels:
+      strategy: "default"
+      symbol: "total"
+    notification_channels: ["email", "telegram"]
+    category: "trading"
+
+# Market Regime Alerts
+regime_alerts:
+  - name: "regime_change_detected"
+    description: "Market regime change detected"
+    severity: "medium"
+    metric_name: "regime_change_detected"
+    threshold: 1.0
+    operator: "eq"
+    duration: 0  # Immediate
+    labels:
+      regime_type: "change"
+    notification_channels: ["email", "telegram"]
+    category: "regime"
+    
+  - name: "volatile_regime"
+    description: "High volatility regime detected"
+    severity: "medium"
+    metric_name: "regime_volatility"
+    threshold: 0.3
+    operator: "gt"
+    duration: 1800  # 30 minutes
+    labels:
+      regime_type: "volatility"
+    notification_channels: ["email", "telegram"]
+    category: "regime"
+    
+  - name: "trending_regime"
+    description: "Strong trending regime detected"
+    severity: "low"
+    metric_name: "regime_trend_strength"
+    threshold: 0.7
+    operator: "gt"
+    duration: 3600  # 1 hour
+    labels:
+      regime_type: "trend"
+    notification_channels: ["email", "telegram"]
+    category: "regime"
+
+# Security Alerts
+security_alerts:
+  - name: "authentication_failure"
+    description: "Multiple authentication failures detected"
+    severity: "critical"
+    metric_name: "auth_failures_total"
+    threshold: 5.0
+    operator: "gt"
+    duration: 300
+    labels:
+      failure_type: "authentication"
+    notification_channels: ["email", "telegram"]
+    category: "security"
+    
+  - name: "api_key_compromise"
+    description: "Suspicious API key usage detected"
+    severity: "critical"
+    metric_name: "api_key_anomalies"
+    threshold: 1.0
+    operator: "gt"
+    duration: 0  # Immediate
+    labels:
+      anomaly_type: "key_usage"
+    notification_channels: ["email", "telegram"]
+    category: "security"
+
+# Alert Rule Groups
+rule_groups:
+  system_health:
+    rules: ["high_cpu_usage", "high_memory_usage", "high_disk_usage", "api_error_rate_high", "database_connection_failure"]
+    enabled: true
+    evaluation_interval: 30
+    
+  trading_performance:
+    rules: ["high_drawdown", "extreme_drawdown", "low_hit_rate", "negative_sharpe_ratio", "large_pnl_loss"]
+    enabled: true
+    evaluation_interval: 60
+    
+  market_regime:
+    rules: ["regime_change_detected", "volatile_regime", "trending_regime"]
+    enabled: true
+    evaluation_interval: 300
+    
+  security:
+    rules: ["authentication_failure", "api_key_compromise"]
+    enabled: true
+    evaluation_interval: 30
+
+# Alert Dependencies
+dependencies:
+  - rule: "extreme_drawdown"
+    depends_on: ["high_drawdown"]
+    condition: "escalation"
+    
+  - rule: "api_key_compromise"
+    depends_on: ["authentication_failure"]
+    condition: "correlation"
+
+# Alert Suppression Rules
+suppression_rules:
+  - name: "maintenance_window"
+    description: "Suppress system alerts during maintenance"
+    conditions:
+      time_range: "02:00-03:00"
+      days: ["sunday"]
+    suppressed_rules: ["high_cpu_usage", "high_memory_usage", "database_connection_failure"]
+    
+  - name: "market_hours"
+    description: "Suppress trading alerts outside market hours"
+    conditions:
+      time_range: "21:00-09:00"
+      days: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    suppressed_rules: ["regime_change_detected", "volatile_regime", "trending_regime"]
