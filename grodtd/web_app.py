@@ -10,6 +10,7 @@ from flask_cors import CORS
 
 from grodtd.analytics.regime_performance_service import RegimePerformanceService
 from grodtd.regime.service import get_regime_service, RegimeType
+from grodtd.monitoring.metrics_endpoint import create_metrics_endpoint
 
 
 class GRODTWebApp:
@@ -23,6 +24,7 @@ class GRODTWebApp:
         # Initialize services
         self.regime_service = get_regime_service()
         self.analytics_service = RegimePerformanceService(db_path, self.regime_service)
+        self.metrics_endpoint = create_metrics_endpoint(db_path)
         
         # Configure CORS for cross-origin requests
         CORS(self.app)
@@ -266,6 +268,42 @@ class GRODTWebApp:
                 
             except Exception as e:
                 self.logger.error(f"Error updating regime accuracy: {e}")
+                return jsonify({
+                    'error': 'Internal server error',
+                    'message': str(e)
+                }), 500
+        
+        @self.app.route('/metrics', methods=['GET'])
+        def get_metrics():
+            """
+            Prometheus metrics endpoint.
+            
+            Returns metrics in Prometheus format for scraping.
+            """
+            try:
+                return self.metrics_endpoint.get_metrics_response()
+            except Exception as e:
+                self.logger.error(f"Error getting metrics: {e}")
+                return jsonify({
+                    'error': 'Internal server error',
+                    'message': str(e)
+                }), 500
+        
+        @self.app.route('/metrics/status', methods=['GET'])
+        def get_metrics_status():
+            """
+            Get metrics collection status.
+            
+            Returns information about metrics collection status and performance.
+            """
+            try:
+                status = self.metrics_endpoint.get_collection_status()
+                return jsonify({
+                    'metrics_status': status,
+                    'timestamp': datetime.now().isoformat()
+                })
+            except Exception as e:
+                self.logger.error(f"Error getting metrics status: {e}")
                 return jsonify({
                     'error': 'Internal server error',
                     'message': str(e)
